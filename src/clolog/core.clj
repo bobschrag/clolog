@@ -1,5 +1,5 @@
-(ns prolog.core
-  (:require [clojure.pprint :refer [cl-format]]
+(ns clolog.core
+  (:require [clojure.pprint :refer [cl-format pprint]]
             [clojure.string :as str]
             [clojure.set :refer [difference]]
             [clojure.walk :refer [postwalk]]
@@ -266,7 +266,7 @@
 (def ^:private public-built-in-special-heads '#{truthy? do evals-from?
                                                 var ground
                                                 and or not if
-                                                first 
+                                                first
                                                 same
                                                 true false})
 
@@ -332,7 +332,7 @@
 
 (declare i?var?)
 
-;;; FUTURE: Index beyond predicates.  
+;;; FUTURE: Index beyond predicates.
 (defn- candidate-assertions [goal]
   (when goal
     (if (or (i?var? goal) (= goal '(&)))
@@ -457,7 +457,7 @@
                     (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))
                   (filter #(>= % (dec &-position))
                           (keys (get @*assertions* predicate))))))))))
-      
+
 ;;; `clause-pattern` here is for assertions' head clauses (only).
 (defn retract-subsumed-assertions [clause-pattern]
   "Retract the assertions subsumed by `clause-pattern`."
@@ -531,7 +531,7 @@
 
       (some #{'&} head)
       (retract-specific-assertion-variadic-head assertion)
-      
+
       :else
       (let [predicate (get-predicate head :unindexed)
             arity (if (some #{'&} head)
@@ -565,7 +565,7 @@
   (print-dup (format-i?var x) writer))
 
 (defn- i?var? [expr]
-  (= (type expr) prolog.core.I?var))
+  (= (type expr) clolog.core.I?var))
 
 (defn unprint-i?var [e]
   "Convert an i?var's print representations to an actual i?var."
@@ -627,11 +627,11 @@
 
            (is-?var? val)
            (de-reference bindings val unindexed?)
-           
+
            (and (or (seq? val) (vector? val))
                 (not (empty? val)))
            ;; `&` never is bound, directly, could be nested.
-           (let [seq-result (if (= '& (first val)) 
+           (let [seq-result (if (= '& (first val))
                               (let [twoth (second val)]
                                 (if (is-?var? twoth)
                                   (let [twoth-binding (var-binding twoth)]
@@ -649,8 +649,8 @@
                               `(~(de-reference bindings (first val) unindexed?)
                                 ~@(de-reference bindings (rest val) unindexed?)))]
              (if (seq? val) seq-result (vec seq-result)))
-           
-           :else 
+
+           :else
            ;; We have hit a non-?var thing we don't traverse.
            val))))
 
@@ -873,11 +873,11 @@
        bindings
        ;; Recursion bottoms out (or we started empty).  We don't unify
        ;; seqs with vecs.  Return bindings.
-       (cond 
+       (cond
          ;; Discard any anonymous ?vars.
          (or (is-anonymous-?var? a) (is-anonymous-?var? b))
          bindings
-         
+
          ;; Bind any ?vars.
          (or (is-?var? a) (is-?var? b))
          (updated bindings a b)
@@ -1018,7 +1018,7 @@
                       answers         (conj answers answer)]
                   (reset! *answers* answers)
                   (when *answers-countdown*
-                    (swap! *answers-countdown* dec count-reduction))
+                    (swap! *answers-countdown* - count-reduction))
                   ;; Return the number subsumed.
                   count-reduction)
                 ;; Else nothing to report.  (Treat `:disjoint` like
@@ -1107,7 +1107,7 @@
             assn-prefix (leash-prefix special-form-depth assn-index)]
         ;; (println assn-prefix "bindings>:" bindings>)
         ;; (println assn-prefix "bindings<:" bindings<)
-        (if head 
+        (if head
           (println assn-prefix "Working on goal"
                    (cl-format nil "~s:" goal)
                    (de-reference bindings goal))
@@ -1213,7 +1213,7 @@
                  bindings
                  continuation))
 
-(defrecord ^:private 
+(defrecord ^:private
            BodyRemainder [capos ; Tells us which `process-...` functions have written here.
                           head ; The head associated (via clause) with this body.
                           body-index
@@ -2072,7 +2072,7 @@
   ;; bindings (e.g., for negation as failure---NAF).  An answer
   ;; template may also include arbitrary stuff, like
   ;; symbols---e.g., [?person bigger_than ?issue].
-  ;; 
+  ;;
   ;; A goal is a clause.
   ;;
   ;; Any template ?vars that remain unbound (even those that do not
@@ -2140,4 +2140,3 @@
 ;;; Elemental Cognition ?
 
 ;;; Present doc strings.
-

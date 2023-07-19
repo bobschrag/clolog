@@ -1,6 +1,7 @@
-(ns prolog.core-test
-  (:require [clojure.test :refer :all]
-            [prolog.core :refer :all]))
+(ns clolog.core-test
+  (:require [clojure.pprint :refer [cl-format]]
+            [clojure.test :refer :all]
+            [clolog.core :refer :all]))
 
 (def ^:dynamic *goal-from-clj*) ; See using test.
 
@@ -176,7 +177,7 @@
              (has-subtype primate human)]
            (query '(has-subtype ?type ?subtype)
                   '((has-subtype ?type ?subtype)))))
-   (is (= '[(has-subtype vertebrate mammal)	  
+   (is (= '[(has-subtype vertebrate mammal)
 	     (has-subtype mammal primate)
 	     (has-subtype primate human)]
            (query '(?pred ?type ?subtype)
@@ -184,7 +185,7 @@
      (is (= '[(primate)]
            (query '(?subtype)
                   '((has-subtype mammal ?subtype)
-                    (has-subtype ?subtype human)))))    
+                    (has-subtype ?subtype human)))))
     ;; Add non-ground, non-unit assertions.
     (do (initialize-prolog)
         ;; `has-subtype` is non-transitive (to avoid infinite recursion) .
@@ -491,20 +492,20 @@
                             (truthy? (list (quote ?x))))))))
     ;; `do` goal:
     (is (= [true]
-           (query true '((male ?x) 
+           (query true '((male ?x)
                          (do ; println
                               (cl-format nil "Hello, ~a." (quote ?x)))))))
     ;; `evals-from?` goal:
     (is (= '["Hello, laban."]
-           (query '?message '((male ?x) 
+           (query '?message '((male ?x)
                               (evals-from? ?message
                                   (cl-format nil "Hello, ~a." (quote ?x)))))))
     (is (= '["Hello, laban"]
-           (? ?message (male ?x) 
+           (? ?message (male ?x)
                        (evals-from? ?message
                                     (str "Hello, " (quote ?x))))))
     (is (= '["Hello, laban."]
-           (query '?message '((male ?x) 
+           (query '?message '((male ?x)
                               (evals-from? [?message]
                                   [(cl-format nil "Hello, ~a." (quote ?x))])))))
     ;;; `same` goal:
@@ -648,7 +649,7 @@
     (is (= '[[?sibling false]]
            (query '[?sibling false] '((cond% (sister ?sibling adam)
                                              (evals-from? ?x 'adam)
-                                             
+
                                              (sister ?sibling eve)
                                              (evals-from? ?x 'eve)
 
@@ -675,7 +676,7 @@
            (binding [*answer-count-limit* 1]
              (query '[?sibling false] '((cond% (sister ?sibling adam)
                                                (evals-from? ?x 'adam)
-                                               
+
                                                (sister ?sibling eve)
                                                (evals-from? ?x 'eve)
 
@@ -760,14 +761,14 @@
            (? true ([complex 1] (1)))))
     ))
 
-;;; Run this (at a prolog.core REPL), to generate leash tests.
+;;; Run this (at a clolog.core REPL), to generate leash tests.
 ;;; Copy any authoritative output to leash-tests.txt.
 (comment (binding [*transcribe-query-info* true
                    *leash* true
                    *answer-count-limit* nil
                    ;; Try also `false` (and expect to fail a few tests).
                    *discard-subsumed-answers* true]
-           (prolog.core-test/query-test)))
+           (clolog.core-test/query-test)))
 
 (comment
 ;; Not maintained.  See leash-tests.txt (which we diff against output
@@ -830,7 +831,7 @@ Recorded answer: jacob
              (with-out-str
                (binding [*leash* true]
                  (query true '((foo)))))))
-      
+
       (do (initialize-prolog)
           (assert<- '((male laban))))
       (is (= (with-out-str
@@ -851,7 +852,7 @@ Recorded answer: jacob
              (with-out-str
                (binding [*leash* true]
                  (query '?x '((male ?x) (foo)))))))
-      
+
       (do (initialize-prolog)
           (assert<- '((uncle ?nephew ?uncle) ; <--
                       (parent ?nephew ?parent)
@@ -933,7 +934,7 @@ Recorded answer: laban
 (comment
   ;; Change `defn-` to `defn` in now-private `adjudication-status` and
   ;; `unify`, then uncomment to run these tests.
-  
+
 
   (deftest adjudication-status-test
     (testing "adjudication-status"

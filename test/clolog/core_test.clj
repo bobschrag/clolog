@@ -1,7 +1,7 @@
 (ns clolog.core-test
-  (:require [clojure.pprint :refer [cl-format]]
-            [clojure.test :refer :all]
-            [clolog.core :refer :all]))
+  (:require [clojure.test :refer :all]
+            [clolog.core :refer :all]
+            [clojure.pprint :refer [cl-format]]))
 
 (def ^:dynamic *goal-from-clj*) ; See using test.
 

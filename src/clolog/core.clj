@@ -1,5 +1,5 @@
 (ns clolog.core
-  (:require [clojure.pprint :refer [cl-format pprint]]
+  (:require [clojure.pprint :refer [pprint cl-format]]
             [clojure.string :as str]
             [clojure.set :refer [difference]]
             [clojure.walk :refer [postwalk]]

@@ -1,6 +1,7 @@
-(ns prolog.core-test
+(ns clolog.core-test
   (:require [clojure.test :refer :all]
-            [prolog.core :refer :all]))
+            [clolog.core :refer :all]
+            [clojure.pprint :refer [cl-format]]))
 
 (def ^:dynamic *goal-from-clj*) ; See using test.
 
@@ -767,7 +768,7 @@
                    *answer-count-limit* nil
                    ;; Try also `false` (and expect to fail a few tests).
                    *discard-subsumed-answers* true]
-           (prolog.core-test/query-test)))
+           (clolog.core-test/query-test)))
 
 (comment
 ;; Not maintained.  See leash-tests.txt (which we diff against output

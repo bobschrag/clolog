@@ -1,5 +1,5 @@
-(ns prolog.core
-  (:require [clojure.pprint :refer [cl-format]]
+(ns clolog.core
+  (:require [clojure.pprint :refer [pprint cl-format]]
             [clojure.string :as str]
             [clojure.set :refer [difference]]
             [clojure.walk :refer [postwalk]]
@@ -565,7 +565,7 @@
   (print-dup (format-i?var x) writer))
 
 (defn- i?var? [expr]
-  (= (type expr) prolog.core.I?var))
+  (= (type expr) clolog.core.I?var))
 
 (defn unprint-i?var [e]
   "Convert an i?var's print representations to an actual i?var."
@@ -1018,7 +1018,7 @@
                       answers         (conj answers answer)]
                   (reset! *answers* answers)
                   (when *answers-countdown*
-                    (swap! *answers-countdown* dec count-reduction))
+                    (swap! *answers-countdown* - count-reduction))
                   ;; Return the number subsumed.
                   count-reduction)
                 ;; Else nothing to report.  (Treat `:disjoint` like

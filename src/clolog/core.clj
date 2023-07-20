@@ -2128,15 +2128,3 @@
   "The macro version of function `query`."
   `(query (quote ~answer-template) (quote ~goals)))
 
-;;; ----------------------------------------------------------------
-;;; Housekeeping:
-
-;;; --> clolog dirs
-
-;;; CLJS, other target platforms
-
-;;; Maven, ... ?
-
-;;; Elemental Cognition ?
-
-;;; Present doc strings.

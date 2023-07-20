@@ -7,4 +7,3 @@
                  ]
   :repl-options {:init-ns clolog.core}
   )
-

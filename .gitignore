@@ -1,0 +1,8 @@
+.calva/output-window
+.clj-kondo/.cache
+.cpcache
+.lein-failures
+.lsp/.cache
+.nrepl-port
+.portal/vs-code.edn
+target/

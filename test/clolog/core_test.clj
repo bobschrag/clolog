@@ -494,12 +494,12 @@
     (is (= [true]
            (query true '((male ?x)
                          (do ; println
-                              (cl-format nil "Hello, ~a." (quote ?x)))))))
+                              (clojure.pprint/cl-format nil "Hello, ~a." (quote ?x)))))))
     ;; `evals-from?` goal:
     (is (= '["Hello, laban."]
            (query '?message '((male ?x)
                               (evals-from? ?message
-                                  (cl-format nil "Hello, ~a." (quote ?x)))))))
+                                  (clojure.pprint/cl-format nil "Hello, ~a." (quote ?x)))))))
     (is (= '["Hello, laban"]
            (? ?message (male ?x)
                        (evals-from? ?message
@@ -507,7 +507,7 @@
     (is (= '["Hello, laban."]
            (query '?message '((male ?x)
                               (evals-from? [?message]
-                                  [(cl-format nil "Hello, ~a." (quote ?x))])))))
+                                  [(clojure.pprint/cl-format nil "Hello, ~a." (quote ?x))])))))
     ;;; `same` goal:
     (initialize-prolog)
     (is (= '[[1 2]]

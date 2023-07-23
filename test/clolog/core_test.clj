@@ -491,6 +491,8 @@
                             (male ?x)
                             (truthy? (list (quote ?x))))))))
     ;; `do` goal:
+    ;; These tests fail (?!) unless 'cl-format is fully qualified
+    ;; here (despite referral in `clolog.core-test` ns).
     (is (= [true]
            (query true '((male ?x)
                          (do ; println

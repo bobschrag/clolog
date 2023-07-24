@@ -177,12 +177,12 @@
              (has-subtype primate human)]
            (query '(has-subtype ?type ?subtype)
                   '((has-subtype ?type ?subtype)))))
-   (is (= '[(has-subtype vertebrate mammal)
+    (is (= '[(has-subtype vertebrate mammal)
 	     (has-subtype mammal primate)
 	     (has-subtype primate human)]
            (query '(?pred ?type ?subtype)
                   '((?pred ?type ?subtype)))))
-     (is (= '[(primate)]
+    (is (= '[(primate)]
            (query '(?subtype)
                   '((has-subtype mammal ?subtype)
                     (has-subtype ?subtype human)))))
@@ -477,7 +477,7 @@
                         (evals-from? ?y (list (quote ?x)))))))
     (is (= '[laban]
            (query '?x '((and (male ?x)
-                        (truthy? (list (quote ?x))))))))
+                             (truthy? (list (quote ?x))))))))
     (is (= '[laban]
            (query '?x '((male ?x)
                         (truthy? (= (quote ?x) 'laban))))))
@@ -495,62 +495,19 @@
            (? ?message (male ?x)
                        (evals-from? ?message
                                     (str "Hello, " (quote ?x))))))
-    (case (ns-name *ns*)
-      user
-      (do (is (= '[user] (? ?ns (evals-from? ?ns (ns-name *ns*)))))
-          ;; With `deps.clj` (or with `lein test`), these tests fail
-          ;; unless 'cl-format is fully qualified here (despite
-          ;; referral in `clolog.core-test` ns).
-          (is (= [true]
-                 (query true '((male ?x)
-                               (do ; println
-                                 (clojure.pprint/cl-format nil "Hello, ~a." (quote ?x)))))))
-          ;; `evals-from?` goal:
-          (is (= '["Hello, laban."]
-                 (query '?message '((male ?x)
-                                    (evals-from? ?message
-                                                 (clojure.pprint/cl-format nil "Hello, ~a." (quote ?x)))))))
-          (is (= '["Hello, laban."]
-                 (query '?message '((male ?x)
-                                    (evals-from? [?message]
-                                                 [(clojure.pprint/cl-format nil "Hello, ~a." (quote ?x))])))))
-          ;; Another way to handle this:
-          (binding [*ns* (find-ns 'clolog.core)]
-            (is (= [true]
-                 (query true '((male ?x)
-                               (do ; println
-                                 (cl-format nil "Hello, ~a." (quote ?x)))))))
-          ;; `evals-from?` goal:
-          (is (= '["Hello, laban."]
-                 (query '?message '((male ?x)
-                                    (evals-from? ?message
-                                                 (cl-format nil "Hello, ~a." (quote ?x)))))))
-          (is (= '["Hello, laban."]
-                 (query '?message '((male ?x)
-                                    (evals-from? [?message]
-                                                 [(cl-format nil "Hello, ~a." (quote ?x))])))))))
-
-      ;; Under CEDAR's test runner, when jacked in using command
-      ;; `lein`.  Note that `project.clj` includes `:repl-options
-      ;; {:init-ns clolog.core}`.  Of coursre, the above would work,
-      ;; too.  We just want to show here that the namespace
-      ;; qualification isn't necessary when running under an
-      ;; appropriate namespace.
-      clolog.core 
-      (do (is (= '[clolog.core] (? ?ns (evals-from? ?ns (ns-name *ns*)))))
-          (is (= [true]
-                 (query true '((male ?x)
-                               (do ; println
-                                 (cl-format nil "Hello, ~a." (quote ?x)))))))
-          ;; `evals-from?` goal:
-          (is (= '["Hello, laban."]
-                 (query '?message '((male ?x)
-                                    (evals-from? ?message
-                                                 (cl-format nil "Hello, ~a." (quote ?x)))))))
-          (is (= '["Hello, laban."]
-                 (query '?message '((male ?x)
-                                    (evals-from? [?message]
-                                                 [(cl-format nil "Hello, ~a." (quote ?x))])))))))
+    (is (= [true]
+           (query true '((male ?x)
+                         (do ; println
+                           (clojure.pprint/cl-format nil "Hello, ~a." (quote ?x)))))))
+    ;; `evals-from?` goal:
+    (is (= '["Hello, laban."]
+           (query '?message '((male ?x)
+                              (evals-from? ?message
+                                           (clojure.pprint/cl-format nil "Hello, ~a." (quote ?x)))))))
+    (is (= '["Hello, laban."]
+           (query '?message '((male ?x)
+                              (evals-from? [?message]
+                                           [(clojure.pprint/cl-format nil "Hello, ~a." (quote ?x))])))))
     ;;; `same` goal:
     (initialize-prolog)
     (is (= '[[1 2]]

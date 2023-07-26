@@ -276,6 +276,7 @@
 (def evals-from?)
 (def ground)
 (def same)
+(def ->?)
 
 (defn- public-built-in-special-head? [head]
   (contains? public-built-in-special-heads head))
@@ -658,28 +659,51 @@
 (defn- de-reference-unindexed [bindings term]
   (de-reference bindings term :unindexed))
 
-(defmacro ^:private walk-exprs [predicate handler expr]
-  `(postwalk (fn [~'expr]
-               (if (~predicate ~'expr)
-                 (~handler ~'expr)
-                 ~'expr))
-             ~expr))
+;;; We want to look inside only seqs and vectors---so can't use
+;;; generic `walk-exprs` based on `postwalk`.
+(comment
+  (defmacro walk-exprs [predicate handler expr]
+    `(postwalk (fn [~'expr]
+                 (if (~predicate ~'expr)
+                   (~handler ~'expr)
+                   ~'expr))
+               ~expr)))
 
+(defn- ^:private walk-walkable [predicate handler expr]
+  (if (or (seq? expr) (vector? expr))
+    (if (empty? expr)
+      expr
+      (if (predicate expr)
+        (handler expr)
+        (let [seq-result `(~(walk-walkable predicate handler (first expr))
+                           ~@(walk-walkable predicate handler (rest expr)))]
+          (if (seq? expr) seq-result (vec seq-result)))))
+    (if (predicate expr)
+      (handler expr)
+      expr)))
+
+(defn- collect-terminals-if
+  ;; `pred` is responsible for qualifying the type of `expr`.
+  ([pred expr]
+   (collect-terminals-if pred expr #{}))
+  ([pred expr terminals]
+     (pred expr)
+     (conj terminals expr)
+
+   (if (or (seq? expr) (vector? expr))
+     (if (empty? expr)
+       terminals
+       (clojure.set/union (collect-terminals-if pred (first expr) terminals)
+                          (collect-terminals-if pred (rest expr) terminals)))
+     (if (pred expr)
+       (conj terminals expr)
+       terminals))))
+  
 (defn- i?vars-of [expr]
-  (let [vars (atom #{})]
-    ;; Here we're generating a nonsense expr version that we
-    ;; discard...
-    (walk-exprs i?var?
-                #(swap! vars conj %) ; ...for this effect.
-                expr)
-    @vars))
+  (collect-terminals-if i?var? expr))
 
 (defn- ?vars-of [expr]
-  (let [vars (atom #{})]
-    (walk-exprs ?var?
-                #(swap! vars conj %)
-                expr)
-    @vars))
+  (collect-terminals-if ?var? expr))
 
 (defn- ground?
   ([expr]
@@ -760,10 +784,10 @@
           ?var-renamings (update-?var-renamings reference-index
                                                 term-i?vars
                                                 ?var-renamings)
-          renamed-term (walk-exprs i?var?
-                                   #(or (get ?var-renamings (:?var %))
-                                        %)
-                                   (de-reference bindings term))]
+          renamed-term (walk-walkable i?var?
+                                      #(or (get ?var-renamings (:?var %))
+                                           %)
+                                      (de-reference bindings term))]
       (assoc-i?var-binding bindings reference-i?var renamed-term
                            :overwrite))
     bindings))
@@ -1055,7 +1079,7 @@
 ;;;;; Search---leashing, stack machine, querying:
 
 (comment ; When we were using Riddley, before replacing that with
-         ; `postwalk`:
+         ; `walk-walkable`:
   ;; In order to quote symbols (or whatever) for export from logic to
   ;; Lisp, we need a version of `quote` that our walker will traverse
   ;; and (per specs in the next two functions) not macroexpand.
@@ -1064,14 +1088,14 @@
 (defn- indexify [thing index]
   ;; It's nice for us that Riddley won't penetrate our i?vars.
   ;; It's not so nice that Riddley expands all except specified macros.
-  (walk-exprs ?var? #(->I?var index %) thing))
+  (walk-walkable ?var? #(->I?var index %) thing))
 
 (defn- unindexify [thing index]
-  (walk-exprs (fn [expr]
-                (and (i?var? expr)
-                     (= (:index expr) index)))
-              #(:?var %)
-              thing))
+  (walk-walkable (fn [expr]
+                   (and (i?var? expr)
+                        (= (:index expr) index)))
+                 #(:?var %)
+                 thing))
 
 (defn- leash-pad [special-form-depth index]
   (apply str (repeat (+ index special-form-depth)
@@ -1961,15 +1985,15 @@
       goal
       (let [evals-from?-goals (atom [])
             ->?-free-goal ; ...
-            (walk-exprs #(and (seq? %) (= '->? (first %)))
-                        (fn [->?-form]
-                          (let [clojure-form (second ->?-form)
-                                ??-i?var (indexify (new-unbound-?var '??) goal-index)]
-                            (swap! evals-from?-goals conj
-                                   `(~'evals-from? ~??-i?var ~clojure-form))
-                            ;; Replace in goal with...
-                            ??-i?var))
-                        goal)]
+            (walk-walkable #(and (seq? %) (= '->? (first %)))
+                           (fn [->?-form]
+                             (let [clojure-form (second ->?-form)
+                                   ??-i?var (indexify (new-unbound-?var '??) goal-index)]
+                               (swap! evals-from?-goals conj
+                                      `(~'evals-from? ~??-i?var ~clojure-form))
+                               ;; Replace in goal with...
+                               ??-i?var))
+                           goal)]
         (if (= ->?-free-goal goal)
           goal
           (do (leash-->?-transform special-form-depth goal-index)

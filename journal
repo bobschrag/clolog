@@ -1,0 +1,37 @@
+[bschrag 07/26/23]
+
+We have a goal, need to retrieve matching assertions.
+
+Currently, `candidate-assertions` gets everything plausible.
+
+We want to filter out anything not mentioning constants mentioned in the goal's arguments.
+
+If the goal's arguments mention no constants, keep all the assertions.
+
+For each constant among the goal's arguments:
+
+ Look up the matching assertions.
+
+ Intersect these with remaining candidate assertions.
+
+--> Does `clojure.set/intersection` preserve order meaningfully, predictably?
+
+No.  However, order in maps is preserved (I think...).
+
+It's important to maintain assertion order per `candidates-per-predicate`.
+
+Needed ?: We can create a map of these assertions to their indices in `candidates-per-predicate`, for reference.
+
+Then a map where you'll mark their membership, w.r.t. the set from indexing by constant.
+
+Convert to a seq, and filter out pairs that are unmarked.
+
+[bschrag 07/27/23]
+
+Apart from during-search assertions (retractions may be ok), we can "compile" a predicate/arity by creating a map of assertions to their indices---providing an efficient `index-of` by which we can sort (c) by-constant-indexed assertions.  That could give us an O(c log c) assertion lookup---vs. our current O(m), for (m) predicate/arity assertions.  Variable arity stuff would take some more work.
+
+I'm liking what AllegroGraph has done with its `q` built-in predicate isolation of ground unit clause assertions.  Typically, you don't care about order for data clauses in Prolog control.  However, you may want to control over a ground unit clause that's in your knowledge (vs. data) base.
+
+And, if we connect to a database, we can take advantage of all its indexing.
+
+So---indexing inside Prolog, beyond predicate/arity, seems perhaps unnecessary.

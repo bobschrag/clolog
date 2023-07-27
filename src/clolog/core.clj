@@ -55,13 +55,30 @@
   ;; val: set of assertions.
   (atom {}))
 
+(defn reset!-kb []
+  "Reset the knowledge base.  Erase assertions and their indexes."
+  (reset! *assertions* {})
+  (reset! *assertions-index* {})
+  nil)
+
 (defn- index-by-constant [assertion constant]
   (let [constant-assertions (get *assertions-index* constant #{})
         constant-assertions (conj constant-assertions assertion)]
     (swap! *assertions-index* assoc constant constant-assertions)))
 
+(declare constants-of)
+
 (defn- index-assertion [assertion]
   (mapv #(index-by-constant assertion %)
+        (constants-of (rest (first assertion)))))
+
+(defn- unindex-by-constant [assertion constant]
+  (let [constant-assertions (get *assertions-index* constant #{})
+        constant-assertions (filter #{assertion} constant-assertions)]
+    (swap! *assertions-index* assoc constant constant-assertions)))
+
+(defn- unindex-assertion [assertion]
+  (mapv #(unindex-by-constant assertion %)
         (constants-of (rest (first assertion)))))
 
 ;;; The assertions defining predicate transforms.
@@ -99,7 +116,7 @@
 (declare i?var?)
 
 (defn- get-predicate
-  ([head unindexed?]
+  ([head unindexified?]
    (unindexify (get-predicate (indexify head 0))
                0))
   ([head]
@@ -122,7 +139,7 @@
   last for consideration in search."
   (check-assertion assertion)
   (let [head (first assertion)
-        predicate (get-predicate head :unindexed)
+        predicate (get-predicate head :unindexified)
         arity (if (some #{'&} head)
                 'variadic
                 (count (rest head)))
@@ -134,7 +151,9 @@
                              [])
         arity-assertions (conj arity-assertions assertion)
         predicate-assertions (assoc predicate-assertions arity arity-assertions)]
-    (swap! *assertions* assoc predicate predicate-assertions)))
+    (swap! *assertions* assoc predicate predicate-assertions)
+    (index-assertion assertion)
+    assertion))
 
 (defmacro <- [& assertion]
   "The macro version of function `assert<--`."
@@ -146,7 +165,7 @@
   arity."
   (check-assertion assertion)
   (let [head (first assertion)
-        predicate (get-predicate head :unindexed)
+        predicate (get-predicate head :unindexified)
         arity (if (some #{'&} head)
                 'variadic
                 (count (rest head)))]
@@ -156,7 +175,9 @@
             "Retract assertions with non-ground-complex head clause predicates more particularly.")
     (assert (not= arity 'variadic)
             "Retract variadic assertions more particularly.")
-    (swap! *assertions* update-in [predicate] assoc arity [assertion])))
+    (swap! *assertions* update-in [predicate] assoc arity [assertion])
+    (index-assertion assertion)
+    assertion))
 
 (defmacro <-- [& assertion]
   "The macro version of function `assert<--`."
@@ -166,7 +187,7 @@
   "Add `assertion` to the knowledge base---after clearing the entire
   knowledge base."
   (check-assertion assertion)
-  (reset! *assertions* {})
+  (reset!-kb)
   (assert<- assertion))
 
 (defmacro <--- [& assertion]
@@ -181,7 +202,7 @@
   arity."
   (check-assertion assertion)
   (let [head (first assertion)
-        predicate (get-predicate head :unindexed)
+        predicate (get-predicate head :unindexified)
         arity (if (some #{'&} head)
                 'variadic
                 (count (rest head)))]
@@ -193,7 +214,9 @@
             "Variadic assertion order control not supported.")
     (let [assertions (apply list (predicate-arity-assertions predicate arity))
         assertions (vec (cons assertion assertions))]
-      (swap! *assertions* update-in [predicate] assoc arity assertions))))
+      (swap! *assertions* update-in [predicate] assoc arity assertions)
+      (index-assertion assertion)
+      assertion)))
 
 (defmacro <-0 [& assertion]
   "The macro version of function `assert<-0`."
@@ -252,8 +275,9 @@
 
 (defn initialize-prolog []
   "Reset/clear the knowledge base, clear and re-define transforms."
-  (reset! *assertions* {})
-  (create-predicate-transforms))
+  (reset!-kb)
+  (create-predicate-transforms)
+  nil)
 
 (defn- predicate-arity-assertions [predicate arity]
   (get (get @*assertions* predicate)
@@ -386,11 +410,15 @@
 
 (defn- prune-per-constants [assertions constants]
   (if (empty? constants)
-    assertions
+    assertions ; Vector.
     (let [constant (first constants)
           constants (rest constants)
-          per-constant-assertions (get *assertions-index* constant)
-          assertions (clojure.set/intersection assertions per-constant-assertions)]
+          per-constant-assertions (get *assertions-index* constant) ; Set.
+          ;; Use the set as a filtering function.  This effectively
+          ;; takes the intersection, without converting the vector to
+          ;; a set, so preserves vector's elements' order (important
+          ;; for Prolog control).
+          assertions (filter per-constant-assertions assertions)] ; Vector.
       (prune-per-constants assertions constants))))
 
 (declare i?var-unify)
@@ -405,8 +433,8 @@
                     (let [assertion (if assn-index
                                       (indexify assertion assn-index)
                                       assertion)
-                          unindexed? (if assn-index false :unindexed)
-                          match (if unindexed? unify i?var-unify)
+                          unindexified? (if assn-index false :unindexified)
+                          match (if unindexified? unify i?var-unify)
                           head (first assertion)
                           goals (rest assertion)
                           ;; If not for our fancy predicate notions (e.g.,
@@ -414,17 +442,17 @@
                           ;; to `i?var-unify` just the `rest` of `goal-form`
                           ;; and of `head`.
                           bindings? (and goal head
-                                         (match (de-reference bindings goal unindexed?)
-                                                (de-reference bindings head unindexed?)
+                                         (match (de-reference bindings goal unindexified?)
+                                                (de-reference bindings head unindexified?)
                                                 bindings))]
                       (when bindings?
                         (list [assertion bindings?]))))
                   (candidate-assertions (indexify goal 0)))]
-      (if (?var goal)
+      (if (?var? goal)
         candidates-per-predicate
         ;; The catch is that we want this operation to preserve
         ;; assertion order, for Prolog control.
-        (prune-per-constants (set candidates-per-predicate) (constants-of (rest goal)))))))
+        (prune-per-constants candidates-per-predicate (constants-of (rest goal)))))))
 
 (defn get-matching-assertions [clause-pattern]
   "Return a vector of the assertions matching `clause-pattern`."
@@ -465,41 +493,43 @@
       (swap! *assertions* update-in [predicate] dissoc arity)
       (swap! *assertions* update-in [predicate] assoc arity remaining-assns))
     (when-not (seq (get @*assertions* predicate))
-      (swap! *assertions* dissoc predicate))))
+      (swap! *assertions* dissoc predicate))
+    (mapv unindex-assertion actually-retracted-assns)))
 
 (defn- retract-subsumed-assertions-variadic [clause-pattern]
   (let [clause-pattern (vec clause-pattern)
         &-position (.indexOf clause-pattern '&)]
     (if (= &-position 0)
       ;; So, `(and (= arity 0) (?var? (second clause-pattern)))`.
-      (reset! *assertions* {})
+      (reset!-kb)
       ;; Else we have a predicate.
-      (let [predicate (get-predicate clause-pattern :unindexed)]
+      (let [predicate (get-predicate clause-pattern :unindexified)]
         (if (= predicate 'variable)
           (if (= &-position 1)
-            (reset! *assertions* {})
+            (reset!-kb)
             ;; Drop greater arities of all predicates.
             (mapv (fn [predicate]
                     (retract-subsumed-assertions-variadic `(~predicate ~@(rest clause-pattern))))
                   (keys @*assertions*)))
-          (if (= &-position 1)
-            ;; Drop all arities.
-            (swap! *assertions* dissoc predicate)
-            ;; Drop greater arities.
+          (do 
+            ;; Drop greater arities (unindexing as we go).
             (mapv (fn [arity]
                     (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))
                   (filter #(>= % (dec &-position))
-                          (keys (get @*assertions* predicate))))))))))
+                          (keys (get @*assertions* predicate))))
+            (when (= &-position 1)
+              ;; Drop all arities.
+              (swap! *assertions* dissoc predicate))))))))
 
 ;;; `clause-pattern` here is for assertions' head clauses (only).
 (defn retract-subsumed-assertions [clause-pattern]
   "Retract the assertions subsumed by `clause-pattern`."
   ;; (println (cl-format nil "retract-subsumed-assertions: [~s]" clause-pattern))
   (if (?var? clause-pattern)
-    (reset! *assertions* {})
+    (reset!-kb)
     (if (some #{'&} clause-pattern)
       (retract-subsumed-assertions-variadic clause-pattern)
-      (let [predicate (get-predicate clause-pattern :unindexed)
+      (let [predicate (get-predicate clause-pattern :unindexified)
             arity (count (rest clause-pattern))]
         (if (or (= predicate 'variable)
                 ;; Later, store complex-predicate assertions in a
@@ -513,7 +543,8 @@
                     (keys @*assertions*))
               ;; Handle an input non-ground-complex `clause-pattern`.
               (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))
-          (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))))))
+          (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern)))))
+  nil)
 
 ;;; Compare to Prolog "abolish".
 (defmacro --- [clause-pattern]
@@ -546,7 +577,7 @@
 
 (defn- retract-specific-assertion-variadic-head [assertion]
   (let [head (first assertion)
-        predicate (get-predicate head :unindexed)
+        predicate (get-predicate head :unindexified)
         &-position (.indexOf head '&)]
     (map (fn [arity]
            (retract-specific-assertion-predicate-arity predicate arity assertion))
@@ -566,11 +597,13 @@
       (retract-specific-assertion-variadic-head assertion)
 
       :else
-      (let [predicate (get-predicate head :unindexed)
+      (let [predicate (get-predicate head :unindexified)
             arity (if (some #{'&} head)
                     'variadic
                     (count (rest head)))]
-        (retract-specific-assertion-predicate-arity predicate arity assertion)))))
+        (retract-specific-assertion-predicate-arity predicate arity assertion)))
+    (unindex-assertion assertion)
+    nil))
 
 (defmacro -- [& clauses]
   "The macro version of function `retract-specific-assertion`."
@@ -584,7 +617,7 @@
 ;;; pair from a user's similarly structured pair.  (We don't need to
 ;;; do the same thing for our goals, exclusively internal to Prolog.)
 ;;;
-;;; Indexed ?var:
+;;; Indexified ?var:
 (defrecord ^:private I?var [index ?var])
 
 ;;; To trace the full namespace, comment out these print functions.
@@ -642,13 +675,13 @@
 (defn- de-reference
   ([bindings term]
    (de-reference bindings term false))
-  ([bindings term unindexed?]
+  ([bindings term unindexified?]
    ;; Stop when you get to a non-?var or to a ?var with no binding.
    ;; Per the "push-up" strategy, we should never have to traverse
    ;; more than one hop of indirection here.
-   (let [is-?var? (if unindexed? ?var? i?var?)
+   (let [is-?var? (if unindexified? ?var? i?var?)
          var-binding (fn [the-var]
-                       (if unindexed?
+                       (if unindexified?
                          (get bindings the-var 'none)
                          (let [[index ?var] (vals the-var)]
                            (?var-binding bindings index ?var))))
@@ -659,7 +692,7 @@
            term
 
            (is-?var? val)
-           (de-reference bindings val unindexed?)
+           (de-reference bindings val unindexified?)
 
            (and (or (seq? val) (vector? val))
                 (not (empty? val)))
@@ -672,15 +705,15 @@
                                       `(~'& ~twoth)
                                       (if-not (is-?var? twoth-binding)
                                         ;; Get the value.
-                                        (de-reference bindings twoth-binding unindexed?)
+                                        (de-reference bindings twoth-binding unindexified?)
                                         ;; Retain `&`.
-                                        `(~'& ~@(de-reference bindings twoth-binding unindexed?)))))
+                                        `(~'& ~@(de-reference bindings twoth-binding unindexified?)))))
                                   ;; `(not (is-?var? twoth))`
                                   ;; De-reference, in case of transparent term.
-                                  `(~(de-reference bindings twoth unindexed?))))
+                                  `(~(de-reference bindings twoth unindexified?))))
                               ;; `(not= '& (first val))`: Map normally.
-                              `(~(de-reference bindings (first val) unindexed?)
-                                ~@(de-reference bindings (rest val) unindexed?)))]
+                              `(~(de-reference bindings (first val) unindexified?)
+                                ~@(de-reference bindings (rest val) unindexified?)))]
              (if (seq? val) seq-result (vec seq-result)))
 
            :else
@@ -688,8 +721,8 @@
            val))))
 
 ;;; Used in logic transform application.
-(defn- de-reference-unindexed [bindings term]
-  (de-reference bindings term :unindexed))
+(defn- de-reference-unindexified [bindings term]
+  (de-reference bindings term :unindexified))
 
 ;;; We want to look inside only seqs and vectors---so can't use
 ;;; generic `walk-exprs` based on `postwalk`.
@@ -737,7 +770,7 @@
 (defn- ?vars-of [expr]
   (collect-terminals-if ?var? expr))
 
-;; Unindexed.
+;; Unindexified.
 (defn- constants-of [expr]
   ;; Result includes the head constants of complex terms (not full
   ;; ground complex terms).
@@ -746,8 +779,8 @@
 (defn- ground?
   ([expr]
    (not (seq (i?vars-of expr))))
-  ([expr unindexed?]
-   (if unindexed?
+  ([expr unindexified?]
+   (if unindexified?
      (not (seq (?vars-of expr)))
      (ground? expr))))
 
@@ -887,7 +920,7 @@
           ;; For clarity, leaving this as an `if` with identical
           ;; actions, different comments.
           (if (i?var? goal-value)
-            ;; There is already a (lesser-indexed) "reference" i?var
+            ;; There is already a (lesser-indexified) "reference" i?var
             ;; pointed to by the goal i?var.  Push our value up the
             ;; stack by recording the reference i?var as our value.
             (assoc-i?var-binding bindings assn-form goal-value)
@@ -901,11 +934,11 @@
         (assoc-i?var-binding bindings goal-form assn-form)
         ;; `(not= goal-value 'none)`
         ;; We must have `(i?var? goal-value)`.
-        ;; Write assn-form to (lesser-indexed) goal i?var.
+        ;; Write assn-form to (lesser-indexified) goal i?var.
         (assoc-i?var-binding bindings goal-value assn-form)))))
 
 ;;; The symmetry here supports subsumption operations over the results
-;;; of unindexed unification.
+;;; of unindexified unification.
 (defn- updated-bindings [[env-a env-b] a b]
   (let [env-a (if (?var? a)
                 (assoc env-a a b)
@@ -925,10 +958,10 @@
    (unify a b [{} {}]))
   ([a b bindings]
    (unify a b bindings false))
-  ([a b bindings indexed?]
-   (let [is-?var? (if indexed? i?var? ?var?)
-         is-anonymous-?var? (if indexed? anonymous-i?var? anonymous-?var?)
-         updated (if indexed? i?var-updated-bindings updated-bindings)]
+  ([a b bindings indexified?]
+   (let [is-?var? (if indexified? i?var? ?var?)
+         is-anonymous-?var? (if indexified? anonymous-i?var? anonymous-?var?)
+         updated (if indexified? i?var-updated-bindings updated-bindings)]
      ;; (do (pprint "unify:") (pprint bindings) (pprint a) (pprint b))
      (if (or (and (= a []) (= b []))
              (and (= a ()) (= b ())))
@@ -950,21 +983,21 @@
          (let [[a-head a-tail] [(first a) (like-rest a)]
                [b-head b-tail] [(first b) (like-rest b)]]
            (cond (and (= a-head '&) (= b-head '&))
-                 (unify a-tail b-tail bindings indexed?)
+                 (unify a-tail b-tail bindings indexified?)
 
                  (= a-head '&)
                  (unify (first a-tail) ; `(& ?rest)` ==> `?rest`
-                        b bindings indexed?)
+                        b bindings indexified?)
 
                  (= b-head '&)
-                 (unify a (first b-tail) bindings indexed?)
+                 (unify a (first b-tail) bindings indexified?)
 
                  :else
-                 (let [bindings (unify a-head b-head bindings indexed?)]
+                 (let [bindings (unify a-head b-head bindings indexified?)]
                    (when bindings
-                     (unify (de-reference bindings a-tail (not indexed?))
-                            (de-reference bindings b-tail (not indexed?))
-                            bindings indexed?)))))
+                     (unify (de-reference bindings a-tail (not indexified?))
+                            (de-reference bindings b-tail (not indexified?))
+                            bindings indexified?)))))
 
          ;; Treat anything else as atomic.
          :else
@@ -972,7 +1005,7 @@
            bindings))))))
 
 (defn- i?var-unify [a b bindings]
-  (unify a b bindings :indexed))
+  (unify a b bindings :indexified))
 
 ;;;;; Unification ^^
 ;;;;; ----------------------------------------------------------------
@@ -997,7 +1030,7 @@
 
 ;;; You're subsumed if every one of your ?vars binds a ?var that binds
 ;;; you.  (There could be other ?vars binding your non-?var parts.)
-(defn- subsumes? [env-a env-b] ; Unindexed.
+(defn- subsumes? [env-a env-b] ; Unindexified.
   (every? (fn [[?var-b val-b]]
             (= (get env-a val-b) ?var-b))
           env-b))
@@ -1860,7 +1893,7 @@
     (if bindings><
       (let [[bindings> _bindings<] bindings><
             [special-form-depth assn-index special-form-stack leash-bindings] leash-args
-            output-pattern (de-reference-unindexed bindings> output-pattern)]
+            output-pattern (de-reference-unindexified bindings> output-pattern)]
         (leash-special special-form-depth assn-index "Applying logic transform"
                   (cons input-pattern special-form-stack)
                   ;; leash-bindings ; Don't de-reference...

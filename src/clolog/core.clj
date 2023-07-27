@@ -46,24 +46,6 @@
   simultaneously, or to checkpoint a knowledge base."
   (atom {}))
 
-(def ^:dynamic *assertions-index*
-  "An index of assertions by constants appearing among the arguments of
-  their head clauses.  (N.b.: Does not cover any predicates---not even
-  constants occurring in complex non-ground predicates.)"
-  ;; Map entry:
-  ;; key: constant
-  ;; val: set of assertions.
-  (atom {}))
-
-(defn- index-by-constant [assertion constant]
-  (let [constant-assertions (get *assertions-index* constant #{})
-        constant-assertions (conj constant-assertions assertion)]
-    (swap! *assertions-index* assoc constant constant-assertions)))
-
-(defn- index-assertion [assertion]
-  (mapv #(index-by-constant assertion %)
-        (constants-of (rest (first assertion)))))
-
 ;;; The assertions defining predicate transforms.
 (def ^:dynamic *predicate-transforms*
   "The repository of predicate transforms defined by the user or using
@@ -384,15 +366,6 @@
                              (predicate-arity-assertions 'variable arity)
                              (predicate-arity-assertions 'variable 'variadic))))))))))
 
-(defn- prune-per-constants [assertions constants]
-  (if (empty? constants)
-    assertions
-    (let [constant (first constants)
-          constants (rest constants)
-          per-constant-assertions (get *assertions-index* constant)
-          assertions (clojure.set/intersection assertions per-constant-assertions)]
-      (prune-per-constants assertions constants))))
-
 (declare i?var-unify)
 (declare unify)
 (declare de-reference)
@@ -400,31 +373,25 @@
 (defn- get-assertion-matches [assn-index goal bindings]
   (when-not (or (nil? goal)
                 (special-goal? goal))
-    (let [candidates-per-predicate
-          (mapcat (fn [assertion]
-                    (let [assertion (if assn-index
-                                      (indexify assertion assn-index)
-                                      assertion)
-                          unindexed? (if assn-index false :unindexed)
-                          match (if unindexed? unify i?var-unify)
-                          head (first assertion)
-                          goals (rest assertion)
-                          ;; If not for our fancy predicate notions (e.g.,
-                          ;; predicates that are ?vars), we might here pass
-                          ;; to `i?var-unify` just the `rest` of `goal-form`
-                          ;; and of `head`.
-                          bindings? (and goal head
-                                         (match (de-reference bindings goal unindexed?)
-                                                (de-reference bindings head unindexed?)
-                                                bindings))]
-                      (when bindings?
-                        (list [assertion bindings?]))))
-                  (candidate-assertions (indexify goal 0)))]
-      (if (?var goal)
-        candidates-per-predicate
-        ;; The catch is that we want this operation to preserve
-        ;; assertion order, for Prolog control.
-        (prune-per-constants (set candidates-per-predicate) (constants-of (rest goal)))))))
+    (mapcat (fn [assertion]
+              (let [assertion (if assn-index
+                                (indexify assertion assn-index)
+                                assertion)
+                    unindexed? (if assn-index false :unindexed)
+                    match (if unindexed? unify i?var-unify)
+                    head (first assertion)
+                    goals (rest assertion)
+                    ;; If not for our fancy predicate notions (e.g.,
+                    ;; predicates that are ?vars), we might here pass
+                    ;; to `i?var-unify` just the `rest` of `goal-form`
+                    ;; and of `head`.
+                    bindings? (and goal head
+                                   (match (de-reference bindings goal unindexed?)
+                                          (de-reference bindings head unindexed?)
+                                          bindings))]
+                (when bindings?
+                  (list [assertion bindings?]))))
+            (candidate-assertions (indexify goal 0)))))
 
 (defn get-matching-assertions [clause-pattern]
   "Return a vector of the assertions matching `clause-pattern`."
@@ -737,11 +704,13 @@
 (defn- ?vars-of [expr]
   (collect-terminals-if ?var? expr))
 
-;; Unindexed.
-(defn- constants-of [expr]
-  ;; Result includes the head constants of complex terms (not full
-  ;; ground complex terms).
-  (collect-terminals-if #(not (?var? %)) expr))
+(comment ; From an aborted/discarded indexing idea.
+  ;; Unindexed.
+  (defn- constants-of [expr]
+    ;; Result includes the head constants of complex terms (not full
+    ;; ground complex terms).
+    (collect-terminals-if #(not (?var? %)) expr))
+  )
 
 (defn- ground?
   ([expr]

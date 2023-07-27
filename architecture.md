@@ -114,7 +114,7 @@ depth.
 
 ## Potential future enhancements
 
-Beyond enhncements suggested in `README.md`, we might support...
+Beyond enhancements suggested in `README.md`, we might support...
 
 - Prolog tail recursion
 

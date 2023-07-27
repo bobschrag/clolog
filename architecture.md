@@ -27,7 +27,7 @@ This representation indexes ?vars by search depth, to distinguish
 0 for query goals, then index 1 for an assertion called by a query
 goal, index 2 for an assertion called by a first-level assertion's
 goal, etc.  We call an index-?var pair an i?var.  In leashing (and for
-discussion here), i?vars are rendered as \<index\>`:`\<?var\> (e.g.,
+discussion here), i?vars are rendered as \<?var\>`:`\<index\> (e.g.,
 `?x:3`).
 
 We maintain i?var bindings in a map (usually referred to locally as

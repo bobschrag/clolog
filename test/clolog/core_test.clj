@@ -36,7 +36,7 @@
              ((NONSENSE))]
            (get-matching-assertions '?)))
     (is (= '[((has-subtype vertebrate mammal))]
-           (get-subsumed-assertions '(has-subtype ?type mammal))))
+           (get-subsumed-head-assertions '(has-subtype ?type mammal))))
     (is (= '[((has-subtype ?type ?subsubtype)
               (has-subtype ?type ?subtype)
               (has-subtype ?subtype ?subsubtype))
@@ -72,10 +72,10 @@
     (do (initialize-prolog)
         (assert<--- '((bar))))
     (is (= []
-           (do (retract-subsumed-assertions '(bar))
+           (do (retract-subsumed-head-assertions '(bar))
                (get-matching-assertions '?))))
     (assert<--- '((bar)))
-    (is (= [] (do (retract-subsumed-assertions '?)
+    (is (= [] (do (retract-subsumed-head-assertions '?)
                   (get-matching-assertions '?))))
     (assert<--- '((bar)))
     (is (= [] (do (retract-subsumed-assertions '(?))
@@ -83,7 +83,7 @@
     (assert<--- '((bar)))
     (assert<- '((bar none)))
     (is (= []
-           (do (retract-subsumed-assertions '(bar &))
+           (do (retract-subsumed-head-assertions '(bar &))
                (get-matching-assertions '?))))
     (assert<- '((bar none)))
     (is (= []
@@ -144,11 +144,22 @@
                (get-matching-assertions '?))))
     ;; Retrieval:
     (<--- ([complex ?x] ?x))
-    (is (= (get-subsuming-assertions '([complex 1] 1))
+    (is (= (get-subsuming-head-assertions '([complex 1] 1))
            '[(([complex ?x] ?x))]))
     (<--- ([complex 1] 1))
     (is (= '[(([complex 1] 1))]
-           (get-subsumed-assertions '([complex ?x] ?x))))
+           (get-subsumed-head-assertions '([complex ?x] ?x))))
+    ;; Minimalism:
+    (do (initialize-prolog)
+        (<-_ (has-subtype vertebrate mammal))
+        (<-_ (has-subtype vertebrate ?mammal)))
+    (is (= '[((has-subtype vertebrate ?mammal))]
+           (get-matching-assertions '?)))
+    (do (initialize-prolog)
+        (<-_ (has-subtype vertebrate ?mammal))
+        (<-_ (has-subtype vertebrate mammal)))
+    (is (= '[((has-subtype vertebrate ?mammal))]
+           (get-matching-assertions '?)))
     ))
 
 (deftest query-test

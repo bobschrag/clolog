@@ -573,19 +573,19 @@ single argument, `clause-pattern`, and returns a vector containing the
 knowledge base's assertions whose head clauses exhibit the function's
 required relationship to `clause-pattern`.
 
-Get assertions whose head unifies with `clause-pattern`.
+Get assertions whose head matches `clause-pattern`.
 ```clojure
-(get-matching-assertions clause-pattern)
+(get-matching-head-assertions clause-pattern)
 ```
 
 Get assertions whose head is subsumed by `clause-pattern`.
 ```clojure
-(get-subsumed-assertions clause-pattern)
+(get-subsumed-head-assertions clause-pattern)
 ```
 
 Get assertions whose head subsumes `clause-pattern`.
 ```clojure
-(get-subsuming-assertions clause-pattern)
+(get-subsuming-head-assertions clause-pattern)
 ```
 
 ### Retracting assertions
@@ -783,8 +783,6 @@ motivating use cases.
 ?  - Manifest distinction between failure (no match) and exhaustion (no assertions).
 
 - Potential enhancements to robustness and scale
-
-  - Offer to retract any assertion(s) subsumed by a new assertion.
 
   - Error-check user/application inputs more pervasively.
 

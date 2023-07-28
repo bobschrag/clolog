@@ -155,6 +155,29 @@
   "The macro version of function `assert<---`."
   `(assert<--- (quote ~assertion)))
 
+(declare get-subsuming-assertions)
+(declare get-subsumed-assertions)
+
+;;; TODO: Doc (2).
+(defn assert<-minimalistically [assertion]
+  "Add `assertion` to the knowledge base, unless it is subsumed by an
+  existing assertion.  Retract existing assertions subsumed by
+  `assertion`, if adding `assertion` (if `assertion` is not subsumed).
+  Does not check that the knowledge base is already minimal with
+  respect to `assertion`, so (if you use this at all) you may want to
+  use it pervasively, or at least consistently with respect to a given
+  predicate and arity."
+  ;; FUTURE: Provide feedback.
+  (let [head (first assertion)
+        assertable (not (seq (get-subsuming-assertions assertion)))]
+    (when assertable
+      (retract-subsumed-assertions assertion)
+      (assert<- assertion))))
+
+(defmacro <-_ [& assertion]
+  "The macro version of function `assert<-minimalistically`."
+  `(assert<-minimalistically (quote ~assertion)))
+
 (declare predicate-arity-assertions)
 
 (defn assert<-0 [assertion]
@@ -393,37 +416,66 @@
                   (list [assertion bindings?]))))
             (candidate-assertions (indexify goal 0)))))
 
-(defn get-matching-assertions [clause-pattern]
+(defn get-matching-head-assertions [clause-pattern]
   "Return a vector of the assertions matching `clause-pattern`."
   (vec (map first (get-assertion-matches nil clause-pattern [{} {}]))))
 
 (declare subsumes?)
 
-(defn get-subsumed-assertions [clause-pattern]
-  "Return a vector of the assertions subsumed by `clause-pattern`."
+(defn get-subsumed-head-assertions [clause-pattern]
+  "Return a vector of the assertions whose heads are subsumed by
+  `clause-pattern`."
   (vec (map first
             (filter (fn [match]
                       (let [[pattern-env assn-env] (second match)]
                         (subsumes? pattern-env assn-env)))
                     (get-assertion-matches nil clause-pattern [{} {}])))))
 
-(defn get-subsuming-assertions [clause-pattern]
-  "Return a vector of the assertions subsuming `clause-pattern`."
+(defn get-subsuming-head-assertions [clause-pattern]
+  "Return a vector of the assertions whose heads subsume
+  `clause-pattern`."
   (vec (map first
             (filter (fn [match]
                       (let [[pattern-env assn-env] (second match)]
                         (subsumes? assn-env pattern-env)))
                     (get-assertion-matches nil clause-pattern [{} {}])))))
 
+;;; TODO: Doc (3).
+(defn get-subsuming-assertions [assertion-pattern]
+  "Return a vector of the assertions entirely subsuming
+  `assertion-pattern`."
+  (let [pattern-head (first assertion-pattern)]
+    (filter (fn [assertion]
+              (let [[pattern-env assn-env] (unify assertion-pattern assertion)]
+                (subsumes? assn-env pattern-env)))
+            ;; This will return assertions of any length---we perform
+            ;; no length-related indexing.
+            (candidate-assertions (indexify pattern-head 0)))))
+
+(defn get-subsumed-assertions [assertion-pattern]
+  "Return a vector of the assertions entirely. subsumed by
+  `assertion-pattern`."
+  (let [pattern-head (first assertion-pattern)]
+    (filter (fn [assertion]
+              (let [[pattern-env assn-env] (unify assertion-pattern assertion)]
+                (subsumes? pattern-env assn-env)))
+            ;; This will return assertions of any length---we perform
+            ;; no length-related indexing.
+            (candidate-assertions (indexify pattern-head 0)))))
+
+(defn retract-subsumed-assertions [assertion-pattern]
+  (doseq [assn (get-subsumed-assertions assertion-pattern)]
+    (retract-specific-assertion assn)))
+
 (comment ; Roll your own...
   (defn listing [clause-pattern]
-    (doseq [assn (get-matching-assertions clause-pattern)]
+    (doseq [assn (get-matching-head-assertions clause-pattern)]
       (pprint assn))))
 
-(defn- retract-subsumed-predicate-arity-assertions [predicate arity clause-pattern]
+(defn- retract-subsumed-head-predicate-arity-assertions [predicate arity clause-pattern]
   (let [predicate-assns (or (get @*assertions* predicate) {})
         arity-assns (set (or (get predicate-assns arity) []))
-        retracted-assns (set (get-subsumed-assertions clause-pattern))
+        retracted-assns (set (get-subsumed-head-assertions clause-pattern))
         remaining-assns (difference arity-assns retracted-assns)
         actually-retracted-assns (vec (difference arity-assns remaining-assns))
         remaining-assns (vec remaining-assns)]
@@ -434,7 +486,7 @@
     (when-not (seq (get @*assertions* predicate))
       (swap! *assertions* dissoc predicate))))
 
-(defn- retract-subsumed-assertions-variadic [clause-pattern]
+(defn- retract-subsumed-head-assertions-variadic [clause-pattern]
   (let [clause-pattern (vec clause-pattern)
         &-position (.indexOf clause-pattern '&)]
     (if (= &-position 0)
@@ -447,25 +499,25 @@
             (reset! *assertions* {})
             ;; Drop greater arities of all predicates.
             (mapv (fn [predicate]
-                    (retract-subsumed-assertions-variadic `(~predicate ~@(rest clause-pattern))))
+                    (retract-subsumed-head-assertions-variadic `(~predicate ~@(rest clause-pattern))))
                   (keys @*assertions*)))
           (if (= &-position 1)
             ;; Drop all arities.
             (swap! *assertions* dissoc predicate)
             ;; Drop greater arities.
             (mapv (fn [arity]
-                    (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))
+                    (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))
                   (filter #(>= % (dec &-position))
                           (keys (get @*assertions* predicate))))))))))
 
 ;;; `clause-pattern` here is for assertions' head clauses (only).
-(defn retract-subsumed-assertions [clause-pattern]
+(defn retract-subsumed-head-assertions [clause-pattern]
   "Retract the assertions subsumed by `clause-pattern`."
-  ;; (println (cl-format nil "retract-subsumed-assertions: [~s]" clause-pattern))
+  ;; (println (cl-format nil "retract-subsumed-head-assertions: [~s]" clause-pattern))
   (if (?var? clause-pattern)
     (reset! *assertions* {})
     (if (some #{'&} clause-pattern)
-      (retract-subsumed-assertions-variadic clause-pattern)
+      (retract-subsumed-head-assertions-variadic clause-pattern)
       (let [predicate (get-predicate clause-pattern :unindexed)
             arity (count (rest clause-pattern))]
         (if (or (= predicate 'variable)
@@ -474,18 +526,19 @@
                 ;; ones.
                 (= predicate 'non-ground-complex))
           ;; Drop all subsumed clauses of exhibited arity.
+          ;; TODO: Replace `mapv`s with `doseq`s.
           (do (mapv (fn [predicate]
                       (let [clause-pattern `(~predicate ~@(rest clause-pattern))]
-                        (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern)))
+                        (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern)))
                     (keys @*assertions*))
               ;; Handle an input non-ground-complex `clause-pattern`.
-              (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))
-          (retract-subsumed-predicate-arity-assertions predicate arity clause-pattern))))))
+              (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))
+          (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))))))
 
 ;;; Compare to Prolog "abolish".
 (defmacro --- [clause-pattern]
-  "The macro version of function `retract-subsumed-assertions`."
-  `(retract-subsumed-assertions (quote ~clause-pattern)))
+  "The macro version of function `retract-subsumed-head-assertions`."
+  `(retract-subsumed-head-assertions (quote ~clause-pattern)))
 
 ;;; The above will retract any assertion whose head matches
 ;;; `clause-pattern`.  To retract just a specific assertion, use
@@ -2092,7 +2145,7 @@
     (println)
     (pprint `(~'do (~'initialize-prolog)
               ~@(map (fn [assn] `(~'assert<- '~assn))
-                     (get-matching-assertions '?_))))
+                     (get-matching-head-assertions '?_))))
     (println)
     (pprint `(~'query '~answer-template '~goals
               :limit ~limit

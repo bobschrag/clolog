@@ -14,7 +14,7 @@
     (is (= '[((has-subtype ?type ?subsubtype)
               (has-subtype ?type ?subtype)
               (has-subtype ?subtype ?subsubtype))]
-           (get-matching-assertions '?)))
+           (get-matching-head-assertions '?)))
     (do (initialize-prolog)
         (assert<- '((has-subtype ?type ?subsubtype) ; <--
                     (has-subtype ?type ?subtype)
@@ -34,14 +34,14 @@
              ((has-subtype NONSENSE))
              ((NONSENSE primate human))
              ((NONSENSE))]
-           (get-matching-assertions '?)))
+           (get-matching-head-assertions '?)))
     (is (= '[((has-subtype vertebrate mammal))]
            (get-subsumed-head-assertions '(has-subtype ?type mammal))))
     (is (= '[((has-subtype ?type ?subsubtype)
               (has-subtype ?type ?subtype)
               (has-subtype ?subtype ?subsubtype))
              ((has-subtype vertebrate mammal))]
-           (get-matching-assertions '(has-subtype ?type mammal))))
+           (get-matching-head-assertions '(has-subtype ?type mammal))))
     ;; Access?
     (is (= '[((has-subtype ?type ?subsubtype)
               (has-subtype ?type ?subtype)
@@ -49,7 +49,7 @@
              ((has-subtype vertebrate mammal))
              ((has-subtype mammal primate))
              ((has-subtype primate human))]
-           (get-matching-assertions '(has-subtype ? ?))))
+           (get-matching-head-assertions '(has-subtype ? ?))))
     (is (= '(((has-subtype ?type ?subsubtype)
               (has-subtype ?type ?subtype)
               (has-subtype ?subtype ?subsubtype))
@@ -57,52 +57,52 @@
              ((has-subtype mammal primate))
              ((has-subtype primate human))
              ((NONSENSE primate human)))
-           (get-matching-assertions '(? ? ?))))
+           (get-matching-head-assertions '(? ? ?))))
     ;; Variants:
     (is (= '[((bar))]
            (do (assert<--- '((bar)))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (is (= '[((bar))]
            (do (assert<-- '((bar)))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (is (= '[((bar)) ((bar))]
            (do (assert<-0 '((bar)))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     ;; Retraction:
     (do (initialize-prolog)
         (assert<--- '((bar))))
     (is (= []
            (do (retract-subsumed-head-assertions '(bar))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (assert<--- '((bar)))
     (is (= [] (do (retract-subsumed-head-assertions '?)
-                  (get-matching-assertions '?))))
+                  (get-matching-head-assertions '?))))
     (assert<--- '((bar)))
     (is (= [] (do (retract-subsumed-assertions '(?))
-                  (get-matching-assertions '?))))
+                  (get-matching-head-assertions '?))))
     (assert<--- '((bar)))
     (assert<- '((bar none)))
     (is (= []
            (do (retract-subsumed-head-assertions '(bar &))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (assert<- '((bar none)))
     (is (= []
            (do (--- (bar &))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (do (initialize-prolog)
         (<- (variadic-term []))
         (<- (variadic-term [1]))
         (<- (variadic-term [1 2])))
     (is (= []
            (do (--- (variadic-term [& ?rest]))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (do (initialize-prolog)
         (<- (variadic-term []))
         (<- (variadic-term [1]))
         (<- (variadic-term [1 2])))
     (is (= '[((variadic-term []))]
            (do (--- (variadic-term [1 & ?rest]))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (do (initialize-prolog)
         (<- (variadic-term [& ?rest]))
         (<- (variadic-term []))
@@ -112,36 +112,36 @@
              ((variadic-term [1]))
              ((variadic-term [1 2]))]
            (do (-- (variadic-term [& ?rest]))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (do (initialize-prolog)
         (<- (variadic))
         (<- (variadic 1))
         (<- (variadic 1 2)))
     (is (= []
            (do (--- (variadic & ?rest))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     ;; Non-ground complex predicate:
     (<--- ([complex 1] 1))
     (is (= []
            (do (--- ([complex ?x] ?x))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (<--- ([complex ?x] ?x))
     (is (= []
            (do (--- ([complex ?x] ?x))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (<--- ([complex & ?rest] ?rest))
     (is (= '[(([complex & ?rest] ?rest))]
            (do (--- ([complex 1] (1)))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (<--- ([complex 1] (1)))
     (is (= []
            (do (--- ([complex ?x] ?x))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     (do (<--- ([complex 1] (1)))
         (<- ([complex ?x] ?x)))
     (is (= '[(([complex 1] (1)))]
            (do (-- ([complex ?x] ?x))
-               (get-matching-assertions '?))))
+               (get-matching-head-assertions '?))))
     ;; Retrieval:
     (<--- ([complex ?x] ?x))
     (is (= (get-subsuming-head-assertions '([complex 1] 1))
@@ -154,12 +154,12 @@
         (<-_ (has-subtype vertebrate mammal))
         (<-_ (has-subtype vertebrate ?mammal)))
     (is (= '[((has-subtype vertebrate ?mammal))]
-           (get-matching-assertions '?)))
+           (get-matching-head-assertions '?)))
     (do (initialize-prolog)
         (<-_ (has-subtype vertebrate ?mammal))
         (<-_ (has-subtype vertebrate mammal)))
     (is (= '[((has-subtype vertebrate ?mammal))]
-           (get-matching-assertions '?)))
+           (get-matching-head-assertions '?)))
     ))
 
 (deftest query-test

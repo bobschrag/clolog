@@ -155,11 +155,9 @@
   "The macro version of function `assert<---`."
   `(assert<--- (quote ~assertion)))
 
-(declare get-subsuming-assertions)
-(declare get-subsumed-assertions)
+(declare retract-subsumed-assertions)
 
-;;; TODO: Doc (2).
-(defn assert<-minimalistically [assertion]
+(defn assert<-_ [assertion]
   "Add `assertion` to the knowledge base, unless it is subsumed by an
   existing assertion.  Retract existing assertions subsumed by
   `assertion`, if adding `assertion` (if `assertion` is not subsumed).
@@ -171,12 +169,12 @@
   (let [head (first assertion)
         assertable (not (seq (get-subsuming-assertions assertion)))]
     (when assertable
-      (retract-subsumed-head-assertions assertion)
+      (retract-subsumed-assertions assertion)
       (assert<- assertion))))
 
 (defmacro <-_ [& assertion]
-  "The macro version of function `assert<-minimalistically`."
-  `(assert<-minimalistically (quote ~assertion)))
+  "The macro version of function `assert<-least`."
+  `(assert<-least (quote ~assertion)))
 
 (declare predicate-arity-assertions)
 
@@ -417,7 +415,8 @@
             (candidate-assertions (indexify goal 0)))))
 
 (defn get-matching-head-assertions [clause-pattern]
-  "Return a vector of the assertions matching `clause-pattern`."
+  "Return a vector of the assertions whose heads match
+  `clause-pattern`."
   (vec (map first (get-assertion-matches nil clause-pattern [{} {}]))))
 
 (declare subsumes?)
@@ -440,7 +439,6 @@
                         (subsumes? assn-env pattern-env)))
                     (get-assertion-matches nil clause-pattern [{} {}])))))
 
-;;; TODO: Doc (3).
 (defn get-subsuming-assertions [assertion-pattern]
   "Return a vector of the assertions entirely subsuming
   `assertion-pattern`."
@@ -453,7 +451,7 @@
             (candidate-assertions (indexify pattern-head 0)))))
 
 (defn get-subsumed-assertions [assertion-pattern]
-  "Return a vector of the assertions entirely. subsumed by
+  "Return a vector of the assertions entirely subsumed by
   `assertion-pattern`."
   (let [pattern-head (first assertion-pattern)]
     (filter (fn [assertion]
@@ -463,7 +461,10 @@
             ;; no length-related indexing.
             (candidate-assertions (indexify pattern-head 0)))))
 
+(declare retract-specific-assertion)
+
 (defn retract-subsumed-assertions [assertion-pattern]
+  "Retract the assertions entirely subsumed by `assertion-pattern`."
   (doseq [assn (get-subsumed-assertions assertion-pattern)]
     (retract-specific-assertion assn)))
 

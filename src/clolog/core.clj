@@ -174,7 +174,7 @@
 
 (defmacro <-_ [& assertion]
   "The macro version of function `assert<-least`."
-  `(assert<-least (quote ~assertion)))
+  `(assert<-_ (quote ~assertion)))
 
 (declare predicate-arity-assertions)
 

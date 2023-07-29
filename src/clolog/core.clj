@@ -156,6 +156,7 @@
   `(assert<--- (quote ~assertion)))
 
 (declare retract-subsumed-assertions)
+(declare get-subsuming-assertions)
 
 (defn assert<-_ [assertion]
   "Add `assertion` to the knowledge base, unless it is subsumed by an

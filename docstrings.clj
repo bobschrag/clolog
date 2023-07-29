@@ -61,6 +61,21 @@
   "The macro version of function `assert<-0`."
   `(assert<-0 (quote ~assertion)))
 
+(defn assert<-_ [assertion]
+  "Add `assertion` to the knowledge base, unless it is subsumed by an
+  existing assertion.  Retract existing assertions subsumed by
+  `assertion`, if adding `assertion` (if `assertion` is not subsumed).
+  Does not check that the knowledge base is already minimal with
+  respect to `assertion`, so (if you use this at all) you may want to
+  use it pervasively, or at least consistently with respect to a given
+  predicate and arity."
+  ;; ...
+  )
+
+(defmacro <-_ [& assertion]
+  "The macro version of function `assert<-least`."
+  `(assert<-least (quote ~assertion)))
+
 ;;; Predicate transform (AKA logic macro) facility:
 
 (defn create-predicate-transform [transform]
@@ -113,26 +128,47 @@
 (def evals-from?)
 (def ground)
 (def same)
+(def ->?)
 
-(defn get-matching-assertions [clause-pattern]
-  "Return a vector of the assertions matching `clause-pattern`."
+(defn get-matching-head-assertions [clause-pattern]
+  "Return a vector of the assertions whose heads match
+  `clause-pattern`."
   ;; ...
   )
 
 (declare subsumes?)
 
-(defn get-subsumed-assertions [clause-pattern]
-  "Return a vector of the assertions subsumed by `clause-pattern`."
+(defn get-subsumed-head-assertions [clause-pattern]
+  "Return a vector of the assertions whose heads are subsumed by
+  `clause-pattern`."
   ;; ...
   )
 
-(defn get-subsuming-assertions [clause-pattern]
-  "Return a vector of the assertions subsuming `clause-pattern`."
+(defn get-subsuming-head-assertions [clause-pattern]
+  "Return a vector of the assertions whose heads subsume
+  `clause-pattern`."
   ;; ...
   )
 
-(defn retract-subsumed-assertions [clause-pattern]
+(defn get-subsuming-assertions [assertion-pattern]
+  "Return a vector of the assertions entirely subsuming
+  `assertion-pattern`."
+  ;; ...
+  )
+
+(defn get-subsumed-assertions [assertion-pattern]
+  "Return a vector of the assertions entirely subsumed by
+  `assertion-pattern`."
+  ;; ...
+  )
+
+(defn retract-subsumed-head-assertions [clause-pattern]
   "Retract the assertions subsumed by `clause-pattern`."
+  ;; ...
+  )
+
+(defn retract-subsumed-assertions [assertion-pattern]
+  "Retract the assertions entirely subsumed by `assertion-pattern`."
   ;; ...
   )
 

@@ -414,7 +414,7 @@ Note:
 
 - All ?vars are symbols.
 
-- Clauses, being lists, are terms.
+- Clauses and assertions, being lists, are terms.
 
 - The arguments of operators are clauses.  See our Built-in predicates
   section.
@@ -562,14 +562,25 @@ transforms before making their assertion.
 (assert<--- '((sibling ?x ?y) (brother ?x ?y))) ; Function.
 ```
 
+The following---when employed systematically---avoid
+subsumed-subsuming assertion pairs in the knowledge base, by declining
+to add would-be-subsumed assertions and by retracting subsumed
+assertions.
+
+```clojure
+(<-_ (sibling ?x ?y) (brother ?x ?y)) ; Macro.
+
+(assert<-_ '((sibling ?x ?y) (brother ?x ?y))) ; Function.
+```
+
 We retrieve assertions once upon calling a predicate, and assertion or
 retraction operations otherwise relevant to that predicate will be
 reflected during the call.
 
 ### Retrieving assertions
 
-We provide three functions for retrieving assertions.  Each takes a
-single argument, `clause-pattern`, and returns a vector containing the
+We provide three functions for retrieving assertions by matching their
+heads against a clause pattern.  Each returns a vector containing the
 knowledge base's assertions whose head clauses exhibit the function's
 required relationship to `clause-pattern`.
 
@@ -588,15 +599,30 @@ Get assertions whose head subsumes `clause-pattern`.
 (get-subsuming-head-assertions clause-pattern)
 ```
 
+We provide two similar functions that match assertions against a
+full assertion pattern.
+
+Get assertions entirely subsumed by `assertion-pattern`.
+```clojure
+(get-subsumed-assertions assertion-pattern)
+```
+
+Get assertions entirely subsuming `assertion-pattern`.
+```clojure
+(get-subsuming-assertions assertion-pattern)
+```
+
 ### Retracting assertions
 
-We provide two retraction functions and two corresponding macros.
+We provide two functions, and two corresponding macros, for retracting
+assertions by matching their head clauses against a pattern and
+one function to retract assertions entirely matching an assertion pattern.
 
 The following have equivalent effect.  As in the assertion retrieval
 functions, `clause-pattern` refers to assertions' head clauses.
 
 ```clojure
-(retract-subsumed-assertions clause-pattern)
+(retract-subsumed-head-assertions clause-pattern)
 
 (--- clause-pattern)
 ```
@@ -611,9 +637,9 @@ knowledge base, for the latter to be retracted.
 (-- clause-pattern) ; Macro.
 ```
 
-Should you wish to retract subsuming assertions, consider mapping
-`retract-specific-assertion` (next) over a result from
-`get-matching-assertions`.
+```clojure
+(retract-subsumed-assertions '((?pred deceased-person)))
+```
 
 ## Querying
 

@@ -171,7 +171,7 @@
   (let [head (first assertion)
         assertable (not (seq (get-subsuming-assertions assertion)))]
     (when assertable
-      (retract-subsumed-assertions assertion)
+      (retract-subsumed-head-assertions assertion)
       (assert<- assertion))))
 
 (defmacro <-_ [& assertion]

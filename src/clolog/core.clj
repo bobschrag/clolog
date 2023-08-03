@@ -116,7 +116,8 @@
                              [])
         arity-assertions (conj arity-assertions assertion)
         predicate-assertions (assoc predicate-assertions arity arity-assertions)]
-    (swap! *assertions* assoc predicate predicate-assertions)))
+    (swap! *assertions* assoc predicate predicate-assertions)
+    assertion))
 
 (defmacro <- [& assertion]
   "The macro version of function `assert<--`."
@@ -166,7 +167,7 @@
   respect to `assertion`, so (if you use this at all) you may want to
   use it pervasively, or at least consistently with respect to a given
   predicate and arity."
-  ;; FUTURE: Provide feedback.
+  ;; FUTURE: Provide more feedback.
   (let [head (first assertion)
         assertable (not (seq (get-subsuming-assertions assertion)))]
     (when assertable
@@ -392,7 +393,7 @@
 (declare unify)
 (declare de-reference)
 
-(defn- get-assertion-matches [assn-index goal bindings]
+(defn- goal-assertion-matches [assn-index goal bindings]
   (when-not (or (nil? goal)
                 (special-goal? goal))
     (mapcat (fn [assertion]
@@ -418,7 +419,7 @@
 (defn get-matching-head-assertions [clause-pattern]
   "Return a vector of the assertions whose heads match
   `clause-pattern`."
-  (vec (map first (get-assertion-matches nil clause-pattern [{} {}]))))
+  (vec (map first (goal-assertion-matches nil clause-pattern [{} {}]))))
 
 (declare subsumes?)
 
@@ -429,7 +430,7 @@
             (filter (fn [match]
                       (let [[pattern-env assn-env] (second match)]
                         (subsumes? pattern-env assn-env)))
-                    (get-assertion-matches nil clause-pattern [{} {}])))))
+                    (goal-assertion-matches nil clause-pattern [{} {}])))))
 
 (defn get-subsuming-head-assertions [clause-pattern]
   "Return a vector of the assertions whose heads subsume
@@ -438,15 +439,20 @@
             (filter (fn [match]
                       (let [[pattern-env assn-env] (second match)]
                         (subsumes? assn-env pattern-env)))
-                    (get-assertion-matches nil clause-pattern [{} {}])))))
+                    (goal-assertion-matches nil clause-pattern [{} {}])))))
 
+;;; FUTURE: Consider versions of these two functions that treat an
+;;; assertion as "subsuming" if all of its clauses are subsuming to
+;;; corresponding opposite clauses, but there exist more (so,
+;;; superfluous) opposite clauses.
 (defn get-subsuming-assertions [assertion-pattern]
   "Return a vector of the assertions entirely subsuming
   `assertion-pattern`."
   (let [pattern-head (first assertion-pattern)]
     (filter (fn [assertion]
-              (let [[pattern-env assn-env] (unify assertion-pattern assertion)]
-                (subsumes? assn-env pattern-env)))
+              (when-let [result (unify assertion-pattern assertion)]
+                (let [[pattern-env assn-env] result]
+                  (subsumes? assn-env pattern-env))))
             ;; This will return assertions of any length---we perform
             ;; no length-related indexing.
             (candidate-assertions (indexify pattern-head 0)))))
@@ -456,8 +462,9 @@
   `assertion-pattern`."
   (let [pattern-head (first assertion-pattern)]
     (filter (fn [assertion]
-              (let [[pattern-env assn-env] (unify assertion-pattern assertion)]
-                (subsumes? pattern-env assn-env)))
+              (when-let [result (unify assertion-pattern assertion)]
+                (let [[pattern-env assn-env] result]
+                  (subsumes? pattern-env assn-env))))
             ;; This will return assertions of any length---we perform
             ;; no length-related indexing.
             (candidate-assertions (indexify pattern-head 0)))))
@@ -466,8 +473,10 @@
 
 (defn retract-subsumed-assertions [assertion-pattern]
   "Retract the assertions entirely subsumed by `assertion-pattern`."
-  (doseq [assn (get-subsumed-assertions assertion-pattern)]
-    (retract-specific-assertion assn)))
+  (let [subsumed (get-subsumed-assertions assertion-pattern)]
+    (doseq [assn subsumed]
+      (retract-specific-assertion assn))
+    subsumed))
 
 (comment ; Roll your own...
   (defn listing [clause-pattern]
@@ -500,17 +509,15 @@
           (if (= &-position 1)
             (reset! *assertions* {})
             ;; Drop greater arities of all predicates.
-            (mapv (fn [predicate]
-                    (retract-subsumed-head-assertions-variadic `(~predicate ~@(rest clause-pattern))))
-                  (keys @*assertions*)))
+            (doseq [predicate (keys @*assertions*)]
+              (retract-subsumed-head-assertions-variadic `(~predicate ~@(rest clause-pattern)))))
           (if (= &-position 1)
             ;; Drop all arities.
             (swap! *assertions* dissoc predicate)
             ;; Drop greater arities.
-            (mapv (fn [arity]
-                    (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))
-                  (filter #(>= % (dec &-position))
-                          (keys (get @*assertions* predicate))))))))))
+            (doseq [arity (filter #(>= % (dec &-position))
+                                  (keys (get @*assertions* predicate)))]
+              (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))))))))
 
 ;;; `clause-pattern` here is for assertions' head clauses (only).
 (defn retract-subsumed-head-assertions [clause-pattern]
@@ -528,11 +535,9 @@
                 ;; ones.
                 (= predicate 'non-ground-complex))
           ;; Drop all subsumed clauses of exhibited arity.
-          ;; TODO: Replace `mapv`s with `doseq`s.
-          (do (mapv (fn [predicate]
-                      (let [clause-pattern `(~predicate ~@(rest clause-pattern))]
-                        (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern)))
-                    (keys @*assertions*))
+          (do (doseq [predicate (keys @*assertions*)]
+                (let [clause-pattern `(~predicate ~@(rest clause-pattern))]
+                  (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern)))
               ;; Handle an input non-ground-complex `clause-pattern`.
               (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))
           (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))))))
@@ -1367,7 +1372,7 @@
           and-goals (rest and-form) ; Lose operator.
           goal (first and-goals) ; Gathered into stack frame.
           ;; Ok, even if not looking at a predicate goal:
-          assertion-matches (get-assertion-matches assn-index goal bindings)
+          assertion-matches (goal-assertion-matches assn-index goal bindings)
           and-goals (rest and-goals)
           stack-frame-special-form-stack special-form-stack
           stack-frame-special-form-depth special-form-depth
@@ -1410,7 +1415,7 @@
               (with-body-remainder body-remainder
                 (let [capos (cons capo capos)
                       goal (first goals)
-                      assertion-matches (get-assertion-matches assn-index goal bindings)
+                      assertion-matches (goal-assertion-matches assn-index goal bindings)
                       goals (rest goals) ; Gathered into body remainder.
                       ;; FYI: continuation continuation
                       special-form-stack (if (= operator 'and...)
@@ -1435,7 +1440,7 @@
           goal (first or-goals) ; Gathered into stack frame.
           ;; `nil`, if not looking at a predicate goal:
           assertion-matches (when-not assertion-matches ; Respect an empty coll.
-                              (get-assertion-matches assn-index goal bindings))
+                              (goal-assertion-matches assn-index goal bindings))
           or-goals (rest or-goals)
           outer-special-form-stack special-form-stack
           outer-special-form-depth special-form-depth
@@ -1533,7 +1538,7 @@
           continuation (gather-stack-frame)
           ;; `first` content frame:
           goal first-goal
-          assertion-matches (get-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches goal-index goal bindings)
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
           goals `((~'succeed-first ~continuation)
@@ -1586,7 +1591,7 @@
     (leash-special special-form-depth goal-index "Taking 'else' branch of" special-form-stack bindings)
     (let [capo 'else
           goal (second goal) ; Lose `else`.
-          assertion-matches (get-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches goal-index goal bindings)
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
           goals (cons '(succeed-if) (:goals body-remainder))
@@ -1660,7 +1665,7 @@
     (leash-special special-form-depth goal-index "Taking 'then' branch of" special-form-stack bindings)
     (let [capo 'then
           goal (second goal) ; Lose `then`.
-          assertion-matches (get-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches goal-index goal bindings)
           body-remainder (first body-remainders) ; Has at least `(drop-else ...)`.
           capos (:capos body-remainder)
           goals (:goals body-remainder)
@@ -1680,7 +1685,7 @@
           then-form (nth goal 2)
           then-goal `(~'then ~then-form)
           goal condition-form
-          assertion-matches (get-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches goal-index goal bindings)
           else-frame continuation
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
@@ -1994,7 +1999,7 @@
               goals (rest goals)
               goal-index assn-index
               body-index assn-index ; Gathered into body remainder.
-              assertion-matches (get-assertion-matches
+              assertion-matches (goal-assertion-matches
                                  assn-index goal bindings)
               leash-report (with-out-str
                              ;; (leash-assertion-head assn-index head goals goal bindings)
@@ -2024,7 +2029,7 @@
                   goal (first goals)
                   goals (rest goals)
                   assertion-matches (when-not assertion-matches ; Respect an empty coll.
-                                      (get-assertion-matches assn-index goal bindings))
+                                      (goal-assertion-matches assn-index goal bindings))
                   leash-report (str (with-out-str
                                       (when-not (private-built-in-special-head? (first goal))
                                         (leash-assertion-body special-form-depth
@@ -2111,7 +2116,7 @@
                                             ;; If we've gotten here from a special
                                             ;; stack frame, we won't yet have
                                             ;; fetched our assertion matches.
-                                            (get-assertion-matches (inc (inc goal-index))
+                                            (goal-assertion-matches (inc (inc goal-index))
                                                                    goal bindings)
                                             assertion-matches)]
                     #(process-predicate-frame (gather-stack-frame)))))))))))
@@ -2177,7 +2182,7 @@
           body-index goal-index ; Gathered into body-remainder.
           body-remainders () ; For `gathering-body-remainder`.
           bindings {}
-          assertion-matches (get-assertion-matches (inc goal-index) goal bindings)]
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)]
       (binding [*answer-template* (indexify answer-template stack-index)
                 *query-i?vars* query-i?vars
                 *answers* (atom [])

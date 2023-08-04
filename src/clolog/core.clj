@@ -12,7 +12,7 @@
 ;;;;; Knowledge base:
 
 ;;; We repersent an assertion---i,e., a Prolog rule or fact, as a
-;;; list of clauses (<head> <goal>*), where each clause is a list
+;;; list of statements (<head> <goal>*), where each statement is a list
 ;;; (<predicate> <term>*).
 
 ;;; A term can be just about any Clojure object possessing
@@ -26,7 +26,7 @@
 ;;; multi-word strings.)
 
 ;;; And (apart from Prolog-reserved symbols) there is nothing
-;;; semantically special about the "predicate" position in a "clause"
+;;; semantically special about the "predicate" position in a "statement"
 ;;; tuple.  We do index it more aggressively (so far, exclusively)
 ;;; than the other positions, but a ?var in the predicate position
 ;;; also is completely acceptable.
@@ -59,11 +59,11 @@
 
 (defn- check-assertion [assertion]
   (assert (not (?var? (first assertion)))
-          "Head clauses may not productively match all goals.")
+          "Head statements may not productively match all goals.")
   (let [goal (first assertion)
         head (first goal)]
     (assert (not (= head '&))
-            "Head clauses may not productively match all goals.")
+            "Head statements may not productively match all goals.")
     (assert (not (built-in-special-head? head))
             "No assertions may be added to built-in special forms.")))
 
@@ -100,7 +100,7 @@
 ;;; Consider for FUTURE.
 (defn assert<- [assertion]
   "Add `assertion` to the knowledge base.  If the assertion's head
-  clause has a constant predicate and fixed arity, place `assertion's`
+  statement has a constant predicate and fixed arity, place `assertion's`
   last for consideration in search."
   (check-assertion assertion)
   (let [head (first assertion)
@@ -125,7 +125,7 @@
 
 (defn assert<-- [assertion]
   "Add `assertion` to the knowledge base---after clearing its
-  required-constant head clause predicate at its required-fixed
+  required-constant head statement predicate at its required-fixed
   arity."
   (check-assertion assertion)
   (let [head (first assertion)
@@ -136,7 +136,7 @@
     (assert (not= predicate 'variable)
             "Retract variable-predicate assertions more particularly.")
     (assert (not= predicate 'non-ground-complex)
-            "Retract assertions with non-ground-complex head clause predicates more particularly.")
+            "Retract assertions with non-ground-complex head statement predicates more particularly.")
     (assert (not= arity 'variadic)
             "Retract variadic assertions more particularly.")
     (swap! *assertions* update-in [predicate] assoc arity [assertion])))
@@ -182,7 +182,7 @@
 
 (defn assert<-0 [assertion]
   "Add `assertion` to the knowledge base---after clearing its
-  required-constant head clause predicate at its required-fixed
+  required-constant head statement predicate at its required-fixed
   arity."
   (check-assertion assertion)
   (let [head (first assertion)
@@ -207,7 +207,7 @@
 ;;; Predicate transform (AKA logic macro) facility:
 
 (defn create-predicate-transform [transform]
-  "Create one of the production rules used in transforming a clause
+  "Create one of the production rules used in transforming a statement
   with given predicate."
   (let [goal (first transform)
         head (first goal)
@@ -416,35 +416,35 @@
                   (list [assertion bindings?]))))
             (candidate-assertions (indexify goal 0)))))
 
-(defn get-matching-head-assertions [clause-pattern]
+(defn get-matching-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads match
-  `clause-pattern`."
-  (vec (map first (goal-assertion-matches nil clause-pattern [{} {}]))))
+  `statement-pattern`."
+  (vec (map first (goal-assertion-matches nil statement-pattern [{} {}]))))
 
 (declare subsumes?)
 
-(defn get-subsumed-head-assertions [clause-pattern]
+(defn get-subsumed-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads are subsumed by
-  `clause-pattern`."
+  `statement-pattern`."
   (vec (map first
             (filter (fn [match]
                       (let [[pattern-env assn-env] (second match)]
                         (subsumes? pattern-env assn-env)))
-                    (goal-assertion-matches nil clause-pattern [{} {}])))))
+                    (goal-assertion-matches nil statement-pattern [{} {}])))))
 
-(defn get-subsuming-head-assertions [clause-pattern]
+(defn get-subsuming-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads subsume
-  `clause-pattern`."
+  `statement-pattern`."
   (vec (map first
             (filter (fn [match]
                       (let [[pattern-env assn-env] (second match)]
                         (subsumes? assn-env pattern-env)))
-                    (goal-assertion-matches nil clause-pattern [{} {}])))))
+                    (goal-assertion-matches nil statement-pattern [{} {}])))))
 
 ;;; FUTURE: Consider versions of these two functions that treat an
-;;; assertion as "subsuming" if all of its clauses are subsuming to
-;;; corresponding opposite clauses, but there exist more (so,
-;;; superfluous) opposite clauses.
+;;; assertion as "subsuming" if all of its statements are subsuming to
+;;; corresponding opposite statements, but there exist more (so,
+;;; superfluous) opposite statements.
 (defn get-subsuming-assertions [assertion-pattern]
   "Return a vector of the assertions entirely subsuming
   `assertion-pattern`."
@@ -479,14 +479,14 @@
     subsumed))
 
 (comment ; Roll your own...
-  (defn listing [clause-pattern]
-    (doseq [assn (get-matching-head-assertions clause-pattern)]
+  (defn listing [statement-pattern]
+    (doseq [assn (get-matching-head-assertions statement-pattern)]
       (pprint assn))))
 
-(defn- retract-subsumed-head-predicate-arity-assertions [predicate arity clause-pattern]
+(defn- retract-subsumed-head-predicate-arity-assertions [predicate arity statement-pattern]
   (let [predicate-assns (or (get @*assertions* predicate) {})
         arity-assns (set (or (get predicate-assns arity) []))
-        retracted-assns (set (get-subsumed-head-assertions clause-pattern))
+        retracted-assns (set (get-subsumed-head-assertions statement-pattern))
         remaining-assns (difference arity-assns retracted-assns)
         actually-retracted-assns (vec (difference arity-assns remaining-assns))
         remaining-assns (vec remaining-assns)]
@@ -497,58 +497,58 @@
     (when-not (seq (get @*assertions* predicate))
       (swap! *assertions* dissoc predicate))))
 
-(defn- retract-subsumed-head-assertions-variadic [clause-pattern]
-  (let [clause-pattern (vec clause-pattern)
-        &-position (.indexOf clause-pattern '&)]
+(defn- retract-subsumed-head-assertions-variadic [statement-pattern]
+  (let [statement-pattern (vec statement-pattern)
+        &-position (.indexOf statement-pattern '&)]
     (if (= &-position 0)
-      ;; So, `(and (= arity 0) (?var? (second clause-pattern)))`.
+      ;; So, `(and (= arity 0) (?var? (second statement-pattern)))`.
       (reset! *assertions* {})
       ;; Else we have a predicate.
-      (let [predicate (get-predicate clause-pattern :unindexed)]
+      (let [predicate (get-predicate statement-pattern :unindexed)]
         (if (= predicate 'variable)
           (if (= &-position 1)
             (reset! *assertions* {})
             ;; Drop greater arities of all predicates.
             (doseq [predicate (keys @*assertions*)]
-              (retract-subsumed-head-assertions-variadic `(~predicate ~@(rest clause-pattern)))))
+              (retract-subsumed-head-assertions-variadic `(~predicate ~@(rest statement-pattern)))))
           (if (= &-position 1)
             ;; Drop all arities.
             (swap! *assertions* dissoc predicate)
             ;; Drop greater arities.
             (doseq [arity (filter #(>= % (dec &-position))
                                   (keys (get @*assertions* predicate)))]
-              (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))))))))
+              (retract-subsumed-head-predicate-arity-assertions predicate arity statement-pattern))))))))
 
-;;; `clause-pattern` here is for assertions' head clauses (only).
-(defn retract-subsumed-head-assertions [clause-pattern]
-  "Retract the assertions subsumed by `clause-pattern`."
-  ;; (println (cl-format nil "retract-subsumed-head-assertions: [~s]" clause-pattern))
-  (if (?var? clause-pattern)
+;;; `statement-pattern` here is for assertions' head statements (only).
+(defn retract-subsumed-head-assertions [statement-pattern]
+  "Retract the assertions subsumed by `statement-pattern`."
+  ;; (println (cl-format nil "retract-subsumed-head-assertions: [~s]" statement-pattern))
+  (if (?var? statement-pattern)
     (reset! *assertions* {})
-    (if (some #{'&} clause-pattern)
-      (retract-subsumed-head-assertions-variadic clause-pattern)
-      (let [predicate (get-predicate clause-pattern :unindexed)
-            arity (count (rest clause-pattern))]
+    (if (some #{'&} statement-pattern)
+      (retract-subsumed-head-assertions-variadic statement-pattern)
+      (let [predicate (get-predicate statement-pattern :unindexed)
+            arity (count (rest statement-pattern))]
         (if (or (= predicate 'variable)
                 ;; Later, store complex-predicate assertions in a
                 ;; trie.  Now, this is our way to cover all the ground
                 ;; ones.
                 (= predicate 'non-ground-complex))
-          ;; Drop all subsumed clauses of exhibited arity.
+          ;; Drop all subsumed statements of exhibited arity.
           (do (doseq [predicate (keys @*assertions*)]
-                (let [clause-pattern `(~predicate ~@(rest clause-pattern))]
-                  (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern)))
-              ;; Handle an input non-ground-complex `clause-pattern`.
-              (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))
-          (retract-subsumed-head-predicate-arity-assertions predicate arity clause-pattern))))))
+                (let [statement-pattern `(~predicate ~@(rest statement-pattern))]
+                  (retract-subsumed-head-predicate-arity-assertions predicate arity statement-pattern)))
+              ;; Handle an input non-ground-complex `statement-pattern`.
+              (retract-subsumed-head-predicate-arity-assertions predicate arity statement-pattern))
+          (retract-subsumed-head-predicate-arity-assertions predicate arity statement-pattern))))))
 
 ;;; Compare to Prolog "abolish".
-(defmacro --- [clause-pattern]
+(defmacro --- [statement-pattern]
   "The macro version of function `retract-subsumed-head-assertions`."
-  `(retract-subsumed-head-assertions (quote ~clause-pattern)))
+  `(retract-subsumed-head-assertions (quote ~statement-pattern)))
 
 ;;; The above will retract any assertion whose head matches
-;;; `clause-pattern`.  To retract just a specific assertion, use
+;;; `statement-pattern`.  To retract just a specific assertion, use
 ;;; `retract-specific-assertion`.
 
 ;;; Compare to Prolog "retract".
@@ -599,9 +599,9 @@
                     (count (rest head)))]
         (retract-specific-assertion-predicate-arity predicate arity assertion)))))
 
-(defmacro -- [& clauses]
+(defmacro -- [& statements]
   "The macro version of function `retract-specific-assertion`."
-  `(retract-specific-assertion (quote ~clauses)))
+  `(retract-specific-assertion (quote ~statements)))
 
 ;;;;; Knowledge base ^^
 ;;;;; ----------------------------------------------------------------
@@ -665,7 +665,7 @@
   (let [env (get bindings index)]
     (get env ?var 'none)))
 
-;;; De-reference a ?var or a term (or a clause, ...).
+;;; De-reference a ?var or a term (or a statement, ...).
 (defn- de-reference
   ([bindings term]
    (de-reference bindings term false))
@@ -950,7 +950,7 @@
     (rest seq-or-vec)))
 
 (defn- unify
-  ([a b] ; Terms (or clauses, assertions, ...).
+  ([a b] ; Terms (or statements, assertions, ...).
    (unify a b [{} {}]))
   ([a b bindings]
    (unify a b bindings false))
@@ -1258,7 +1258,7 @@
 
 (defrecord ^:private
            StackFrame [leash-report ; String.
-                       head ; The clause head associated (via clause) with `goals`.
+                       head ; The statement head associated (via statement) with `goals`.
                        goal-index
                        goal
                        assertion-matches ; Remaining assertion matches.
@@ -1271,7 +1271,7 @@
                        ])
 ;;; * This accounts for depth across all frames (including
 ;;; parents)---not just within an assertion.  Consider `(or (and
-;;; <clause>*)*)`, where any embedded <clause> may in its body invoke
+;;; <statement>*)*)`, where any embedded <statement> may in its body invoke
 ;;; a similar conditional.
 
 ;;; We have some macros that let us avoid a lot of typing/source code
@@ -1306,7 +1306,7 @@
 
 (defrecord ^:private
            BodyRemainder [capos ; Tells us which `process-...` functions have written here.
-                          head ; The head associated (via clause) with this body.
+                          head ; The head associated (via statement) with this body.
                           body-index
                           goals ; Remaining goals.
                           ;; A stack of the (complete) logic forms
@@ -1610,7 +1610,7 @@
   "FUTURE: Better idea (?):
     [Optional: Start using vec (rather than nested linked list) for continuations.
      We will be conjing to vec end.]
-    Store cut-frame index in `drop-else` clause.
+    Store cut-frame index in `drop-else` statement.
     If you don't find it there, it's already gone.
     If you do find it, slice it out.
     Constant time---no more searching.")
@@ -2164,7 +2164,7 @@
   ;; template may also include arbitrary stuff, like
   ;; symbols---e.g., [?person bigger_than ?issue].
   ;;
-  ;; A goal is a clause.
+  ;; A goal is a statement.
   ;;
   ;; Any template ?vars that remain unbound (even those that do not
   ;; occur among the goals) are left as is.

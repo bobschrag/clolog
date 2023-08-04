@@ -1,5 +1,9 @@
 # clolog
-Full-featured logic programming (AKA "Prolog") embedded in/callable from and supporting calls to Clojure.  In the spirit of LogLisp, Lisp Machine Prolog, and Franz Inc.'s Allegro Prolog, with some extra goodies.
+
+Full-featured logic programming (AKA "Prolog") embedded in/callable
+from and supporting calls to Clojure.  In the spirit of LogLisp, Lisp
+Machine Prolog, and Franz Inc.'s Allegro Prolog, with some extra
+goodies.
 
 ## Highlights, with examples
 
@@ -20,7 +24,7 @@ Full-featured logic programming (AKA "Prolog") embedded in/callable from and sup
     ```
     
 - **Logical variable- ("?var")-containing Clojure seqs (so, lists) and
-  vectors as "complex" terms---in assertion clauses and answer templates**
+  vectors as "complex" terms---in assertion statements and answer templates**
 
   ```clojure
   > (? (?a ?b)
@@ -358,19 +362,19 @@ In production rules below, ...
 - ":-" separates rules' left- and right-hand sides.
 - "|" separates right-hand sides' alternatives.
 
-\<assertion\>: `(`\<head-clause\>+ \<body-clause\>*`)`
+\<assertion\>: `(`\<head-statement\>+ \<body-statement\>*`)`
 
-\<head-clause\> :- \<clause\>
+\<head-statement\> :- \<statement\>
 
-\<body-clause\> :- \<clause\>
+\<body-statement\> :- \<statement\>
 
-\<clause\> :- \<fixed-arity-clause\> | \<variable-arity-clause\>
+\<statement\> :- \<fixed-arity-statement\> | \<variable-arity-statement\>
 
-\<fixed-arity-clause\> :- `(`\<predicate\>+ \<argument-term\>\*`)`
+\<fixed-arity-statement\> :- `(`\<predicate\>+ \<argument-term\>\*`)`
 
 \<argument-term\> :- \<term\>
 
-\<variable-arity-clause\> :- `(`\<predicate\>+ \<term\>* `&` \<?var\>`)`
+\<variable-arity-statement\> :- `(`\<predicate\>+ \<term\>* `&` \<?var\>`)`
 
 \<predicate\> :- \<special-predicate\> | \<assertion-predicate\>
 
@@ -414,13 +418,13 @@ Note:
 
 - All ?vars are symbols.
 
-- Clauses and assertions, being lists, are terms.
+- Statements and assertions, being lists, are terms.
 
-- The arguments of operators are clauses.  See our Built-in predicates
+- The arguments of operators are statements.  See our Built-in predicates
   section.
 
 - Outside of Clojure-calling predicates' Clojure form arguments:
-  Symbols appearing in clauses are taken at face value, not evaluated.
+  Symbols appearing in statements are taken at face value, not evaluated.
   A symbol used in Prolog otherwise has no relationship to its value
   (or the lack thereof) in Clojure.
 
@@ -431,9 +435,9 @@ logic programming **search** processes (or **calls**), in turn from
 left to right, each **goal** in an (implicitly) conjunctive **query**
 by...
 
-- Identifying assertions whose head clause matches the goal
+- Identifying assertions whose head statement matches the goal
 
-- Prepending a matching assertion's body clauses (AKA the assertion's
+- Prepending a matching assertion's body statements (AKA the assertion's
   **goals**) to the query's remaining goals, after applying the
   match's ?var bindings to each such goal
 
@@ -451,7 +455,7 @@ by...
 
 Search generally proceeds depth-first and from left to right.
 
-We **match** two clauses or transparent terms by associating their
+We **match** two statements or transparent terms by associating their
 respective terms and ?vars, position by position, with consistent
 matching for non-anonymous ?vars.  In matching (AKA "unification"),
 ...
@@ -462,7 +466,7 @@ matching for non-anonymous ?vars.  In matching (AKA "unification"),
 
 - Complex terms match recursively.  Seqs match only seqs, vecs only vecs.
 
-- A **tail ?var** (last in a clause or complex term, and preceded by
+- A **tail ?var** (last in a statement or complex term, and preceded by
   `&`) matches the (possibly empty) seq or list of terms remaining in
   the parallel traversal of its opposing complex term.
 
@@ -476,12 +480,12 @@ Here---and in leash (execution tracing) reports---the notation
 \<predicate\>/\<integer\> (e.g., `sibling/2`) refers to the
 \<integer\> arity of \<predicate\>.
 
-By convention, we take the first argument of a 2-ary clause to be the
+By convention, we take the first argument of a 2-ary statement to be the
 predicate's **subject**, the second to be its **object**.  Thus, in
 `(brother Jane John)`, we take `Jane` to be the subject (or agent),
 `John` to be the object (or patient).  ("A brother of Jane is John.")
 
-A **unit** assertion has only a head clause, no body clauses.
+A **unit** assertion has only a head statement, no body statements.
 
 ## API
 
@@ -506,9 +510,9 @@ transform definitions.
 We provide four assertion creation functions and four corresponding
 macros.  The macros, which don't require quoting arguments, so are
 simpler to use at the REPL or from top level in a file, take their
-clause arguments at top-level.  The functions take theirs in a list.
+statement arguments at top-level.  The functions take theirs in a list.
 
-An assertion's head clause...
+An assertion's head statement...
 
 - May not be a ?var.
 
@@ -524,7 +528,7 @@ An assertion's head clause...
 See the functions' doc strings for other fine points.
 
 The following forms have equivalent effect: Add the assertion with
-head clause `(sibling ?x ?y)` and lone goal clause `(brother ?x ?y)`
+head statement `(sibling ?x ?y)` and lone goal statement `(brother ?x ?y)`
 to the knowledge base.
 
 ```clojure
@@ -536,7 +540,7 @@ to the knowledge base.
 The following place their constant-predicate, fixed-arity assertion
 first for consideration in search.  We provide no explicit control
 over the order in which (less conventional) assertions with variadic,
-variable, or non-ground complex head clause predicates are examined
+variable, or non-ground complex head statement predicates are examined
 during backtracking search.
 
 ```clojure
@@ -580,23 +584,23 @@ reflected during the call.
 ### Retrieving assertions
 
 We provide three functions for retrieving assertions by matching their
-heads against a clause pattern.  Each returns a vector containing the
-knowledge base's assertions whose head clauses exhibit the function's
-required relationship to `clause-pattern`.
+heads against a statement pattern.  Each returns a vector containing the
+knowledge base's assertions whose head statements exhibit the function's
+required relationship to `statement-pattern`.
 
-Get assertions whose head matches `clause-pattern`.
+Get assertions whose head matches `statement-pattern`.
 ```clojure
-(get-matching-head-assertions clause-pattern)
+(get-matching-head-assertions statement-pattern)
 ```
 
-Get assertions whose head is subsumed by `clause-pattern`.
+Get assertions whose head is subsumed by `statement-pattern`.
 ```clojure
-(get-subsumed-head-assertions clause-pattern)
+(get-subsumed-head-assertions statement-pattern)
 ```
 
-Get assertions whose head subsumes `clause-pattern`.
+Get assertions whose head subsumes `statement-pattern`.
 ```clojure
-(get-subsuming-head-assertions clause-pattern)
+(get-subsuming-head-assertions statement-pattern)
 ```
 
 We provide two similar functions that match assertions against a
@@ -615,16 +619,16 @@ Get assertions entirely subsuming `assertion-pattern`.
 ### Retracting assertions
 
 We provide two functions, and two corresponding macros, for retracting
-assertions by matching their head clauses against a pattern and
+assertions by matching their head statements against a pattern and
 one function to retract assertions entirely matching an assertion pattern.
 
 The following have equivalent effect.  As in the assertion retrieval
-functions, `clause-pattern` refers to assertions' head clauses.
+functions, `statement-pattern` refers to assertions' head statements.
 
 ```clojure
-(retract-subsumed-head-assertions clause-pattern)
+(retract-subsumed-head-assertions statement-pattern)
 
-(--- clause-pattern)
+(--- statement-pattern)
 ```
 
 The following have equivalent effect.  Here, `assertion` must be equal
@@ -634,7 +638,7 @@ knowledge base, for the latter to be retracted.
 ```clojure
 (retract-specific-assertion assertion) ; Function.
 
-(-- clause-pattern) ; Macro.
+(-- statement-pattern) ; Macro.
 ```
 
 ```clojure
@@ -690,37 +694,37 @@ Leashing also...
 
 We support the following built-in predicates.  We borrow some notation
 from our Grammar section and allow ourselves to introduce types via
-obvious naming (e.g., a \<condition-clause\> is a
-\<clause\>---distinguished merely by its role/argument position in the
+obvious naming (e.g., a \<condition-statement\> is a
+\<statement\>---distinguished merely by its role/argument position in the
 built-in predicate `if`).  We invoke the exclued middle: If a goal
 does not succeed, then it fails.
 
-- `(and` \<clause\>*`)` succeeds if, proceeding from left to right,
-  every conjunct clause succeeds.
+- `(and` \<statement\>*`)` succeeds if, proceeding from left to right,
+  every conjunct statement succeeds.
 
-- `(or` \<clause\>*`)` succeeds if, proceeding from left to
-  right, some disjunct clause succeeds (and remaining disjuncts are
+- `(or` \<statement\>*`)` succeeds if, proceeding from left to
+  right, some disjunct statement succeeds (and remaining disjuncts are
   ignored).  Backtracking will explore first alternative ways to
-  satisfy a failing clause, then subsequent clauses.
+  satisfy a failing statement, then subsequent statements.
 
-- `(if` \<condition-clause\> \<then-clause\> \<else-clause\>`)`
+- `(if` \<condition-statement\> \<then-statement\> \<else-statement\>`)`
   succeeds if either:
 
-  - The condition clause succeeds and the then clause succeeds (in which
-    case we do not examine the else clause under the bindings for
-    the condition clause's ?vars)
+  - The condition statement succeeds and the then statement succeeds (in which
+    case we do not examine the else statement under the bindings for
+    the condition statement's ?vars)
 
-  - The condition clause fails and the else clause succeeds (in which
-    case we do not examine `then-clause`).
+  - The condition statement fails and the else statement succeeds (in which
+    case we do not examine `then-statement`).
 
   Backtracking will explore alternative ways to satisfy the argument
-  clauses.
+  statements.
 
-- `(not \<clause\>)` succeeds if the wrapped clause fails.
+- `(not \<statement\>)` succeeds if the wrapped statement fails.
 
-- `(first \<clause\>)` succeeds if the argument clause succeeds.  This
+- `(first \<statement\>)` succeeds if the argument statement succeeds.  This
   form (AKA Prolog "cut") skips backtracking to explore other ways of
-  satisfying the clause, upon its first success.
+  satisfying the statement, upon its first success.
 
 - `(same \<term\> \<term\>)` succeeds if the two terms match.
 
@@ -756,17 +760,17 @@ customization, you may wish to copy our version of
 
 `create-predicate-transforms` includes calls to
 `create-predicate-transform`.  Each call is a production rule.  During
-search, a goal matching `source-clause` is transformed---via
-de-referencing---into `target-clause`.
+search, a goal matching `source-statement` is transformed---via
+de-referencing---into `target-statement`.
 
 ```clojure
-(create-predicate-transform source-clause target-clause)
+(create-predicate-transform source-statement target-statement)
 ```
 
 The execution machinery for transform predicates applies the first
 matching transform irrevocably, with no backtracking in case of
 failure.  Compared to an assertion predicate defined using using one
-assertion per transform and the same clauses in each
+assertion per transform and the same statements in each
 transform-assertion pair, it is as if the transform predicate's goal
 always were wrapped with `first`.  We consider predicate transforms to
 be "macros" for Prolog, affording us cleaner leashing than would

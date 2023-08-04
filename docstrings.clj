@@ -20,7 +20,7 @@
 
 (defn assert<- [assertion]
   "Add `assertion` to the knowledge base.  If the assertion's head
-  clause has a constant predicate and fixed arity, place `assertion's`
+  statement has a constant predicate and fixed arity, place `assertion's`
   last for consideration in search."
   ;; ...
   )
@@ -31,7 +31,7 @@
 
 (defn assert<-- [assertion]
   "Add `assertion` to the knowledge base---after clearing its
-  required-constant head clause predicate at its required-fixed
+  required-constant head statement predicate at its required-fixed
   arity."
   ;; ...
   )
@@ -52,7 +52,7 @@
 
 (defn assert<-0 [assertion]
   "Add `assertion` to the knowledge base---after clearing its
-  required-constant head clause predicate at its required-fixed
+  required-constant head statement predicate at its required-fixed
   arity."
   ;; ...
   )
@@ -79,7 +79,7 @@
 ;;; Predicate transform (AKA logic macro) facility:
 
 (defn create-predicate-transform [transform]
-  "Create one of the production rules used in transforming a clause
+  "Create one of the production rules used in transforming a statement
   with given predicate."
   ;; ...
   )
@@ -130,23 +130,23 @@
 (def same)
 (def ->?)
 
-(defn get-matching-head-assertions [clause-pattern]
+(defn get-matching-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads match
-  `clause-pattern`."
+  `statement-pattern`."
   ;; ...
   )
 
 (declare subsumes?)
 
-(defn get-subsumed-head-assertions [clause-pattern]
+(defn get-subsumed-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads are subsumed by
-  `clause-pattern`."
+  `statement-pattern`."
   ;; ...
   )
 
-(defn get-subsuming-head-assertions [clause-pattern]
+(defn get-subsuming-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads subsume
-  `clause-pattern`."
+  `statement-pattern`."
   ;; ...
   )
 
@@ -162,8 +162,8 @@
   ;; ...
   )
 
-(defn retract-subsumed-head-assertions [clause-pattern]
-  "Retract the assertions subsumed by `clause-pattern`."
+(defn retract-subsumed-head-assertions [statement-pattern]
+  "Retract the assertions subsumed by `statement-pattern`."
   ;; ...
   )
 
@@ -172,18 +172,18 @@
   ;; ...
   )
 
-(defmacro --- [clause-pattern]
+(defmacro --- [statement-pattern]
   "The macro version of function `retract-subsumed-assertions`."
-  `(retract-subsumed-assertions (quote ~clause-pattern)))
+  `(retract-subsumed-assertions (quote ~statement-pattern)))
 
 (defn retract-specific-assertion [assertion]
   "Retract `assertion`, using `=` (so, respecting ?var symbols)."
   ;; ...
   )
 
-(defmacro -- [& clauses]
+(defmacro -- [& statements]
   "The macro version of function `retract-specific-assertion`."
-  `(retract-specific-assertion (quote ~clauses)))
+  `(retract-specific-assertion (quote ~statements)))
 
 (defn unprint-i?vars [expr]
   "Convert i?vars' print representations in `expr` to actual

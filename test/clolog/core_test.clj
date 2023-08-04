@@ -747,7 +747,7 @@
     ;; `&` in answer template:
     (is (= [[1 2 3 4]]
            (query '[1 2 & ?rest] '((same ?rest [3 4])))))
-    ;; `&` in assertion head clause:
+    ;; `&` in assertion head statement:
     (do (initialize-prolog)
         (<- (variadic 1))
         (<- (variadic 1 2)))
@@ -756,7 +756,7 @@
     ;; `&` in goal term:
     (is (= '[(variadic 1) (variadic 1 2)]
            (? (variadic & ?rest) (variadic & ?rest))))
-    ;; `&` in assertion head clause term:
+    ;; `&` in assertion head statement term:
     (do (initialize-prolog)
         (<- (variadic-term [1]))
         (<- (variadic-term [1 2])))

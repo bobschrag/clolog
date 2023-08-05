@@ -18,6 +18,11 @@
   definitions."
   (atom {}))
 
+(defn initialize-prolog []
+  "Reset/clear the knowledge base, clear and re-define transforms."
+  ;; ...
+  )
+
 (defn assert<- [assertion]
   "Add `assertion` to the knowledge base.  If the assertion's head
   statement has a constant predicate and fixed arity, place `assertion's`

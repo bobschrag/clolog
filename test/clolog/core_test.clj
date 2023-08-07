@@ -326,8 +326,12 @@
            (query '?r '((successor ?q ?r)))))
     (do (initialize-prolog)
         (assert<- '((pseudo-same ?x ?x))))
-    (is (= '[[?r ?r]]
+    (is (= '[[?q ?r]]
            (query '[?q ?r] '((pseudo-same ?q ?r)))))
+    (is (= '[?x]
+           (query '?x '((pseudo-same ?x ?x)))))
+    (is (= '[?x]
+           (query '?x '((same ?x ?x)))))
     ;; Multi-goal assertions:
     (do (initialize-prolog)
         (assert<- '((uncle ?nephew ?uncle) ; <--
@@ -802,6 +806,27 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
+    ;; For token-matcher:
+    (do (initialize-prolog)
+        (doseq [assn '[((has-kind* ?instance thing) (has-kind ?instance thing))
+                       ((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
+                       ((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
+                       ((has-subkind* ?kind ?subsubkind)
+                        (has-subkind ?kind ?subkind)
+                        (has-subkind* ?subkind ?subsubkind))
+                       ((supports-subject-type ?predicate ?subtype)
+                        (supports-subject-type ?predicate ?type)
+                        (has-subkind ?type ?subtype))
+                       ((supports-object-type ?predicate ?subtype)
+                        (supports-object-type ?predicate ?type)
+                        (has-subkind ?type ?subtype))
+                       ((has-kind ?instance ?type))]]
+          (assert<-_ assn)))
+    (is (= [true]
+           (query true '((evals-from? ?kind (quote thing))
+                         (or (has-kind* ?instance ?kind)
+                             (and (has-subkind* ?kind ?subkind)
+                                  (has-kind ?instance ?subkind)))))))
     ))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.

@@ -14,11 +14,11 @@ de-referenced.)
 ### Unindexed bindings
 
 The unindexed representation covers single-level matching
-needs---retrieving clauses for knowledge base management operations,
-comparing answers.  Unindexed bindings, resulting from unindexed
-matching, are pairs of complementary ?var-value maps, one from the
-perspective of each of the two match arguments.  This representation
-facilitates computing subsumption relationships.
+needs---retrieving assertions for knowledge base management
+operations, comparing answers.  Unindexed bindings, resulting from
+unindexed matching, are pairs of complementary ?var-value maps, one
+from the perspective of each of the two match arguments.  This
+representation facilitates computing subsumption relationships.
 
 ### Indexed bindings
 

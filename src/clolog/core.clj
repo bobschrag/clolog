@@ -1,7 +1,7 @@
 (ns clolog.core
   (:require [clojure.pprint :refer [pprint cl-format]]
             [clojure.string :as str]
-            [clojure.set :refer [difference]]
+            [clojure.set :as set]
             [clojure.walk :refer [postwalk]]
             ))
 
@@ -487,8 +487,8 @@
   (let [predicate-assns (or (get @*assertions* predicate) {})
         arity-assns (set (or (get predicate-assns arity) []))
         retracted-assns (set (get-subsumed-head-assertions statement-pattern))
-        remaining-assns (difference arity-assns retracted-assns)
-        actually-retracted-assns (vec (difference arity-assns remaining-assns))
+        remaining-assns (set/difference arity-assns retracted-assns)
+        actually-retracted-assns (vec (set/difference arity-assns remaining-assns))
         remaining-assns (vec remaining-assns)]
     ;; FUTURE: Provide some useful feedback?
     (if-not (seq remaining-assns)
@@ -752,8 +752,8 @@
    (if (or (seq? expr) (vector? expr))
      (if (empty? expr)
        terminals
-       (clojure.set/union (collect-terminals-if pred (first expr) terminals)
-                          (collect-terminals-if pred (rest expr) terminals)))
+       (set/union (collect-terminals-if pred (first expr) terminals)
+                  (collect-terminals-if pred (rest expr) terminals)))
      (if (pred expr)
        (conj terminals expr)
        terminals))))
@@ -1122,9 +1122,19 @@
   standard output."
   false)
 
+(defn- de-self-reference [answer-bindings]
+  ;; Remove entries (at index 0) that have `:index` 0---avoid spurious
+  ;; de-referencing (and stack overflow).
+  (let [filtered (into {}
+                       (filter (fn [[?var i?var]]
+                                 (not= (:index i?var) 0))
+                               (get answer-bindings 0)))]
+    (assoc {} 0 filtered)))
+
 (defn- handle-answer [bindings]
   ;; Not penetrating sets, maps, ...  Consider walking?
-  (let [answer (de-reference bindings *answer-template*)
+  (let [bindings (de-self-reference bindings)
+        answer (de-reference bindings *answer-template*)
         answer (unindexify answer 0)]
     (let [adjudication (adjudicate-answer answer)]
       ;; Display answer info.

@@ -808,9 +808,7 @@
            (? true ([complex 1] (1)))))
     ;; For token-matcher:
     (do (initialize-prolog)
-        (doseq [assn '[((has-kind* ?instance thing) (has-kind ?instance thing))
-                       ((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
-                       ((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
+        (doseq [assn '[((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
                        ((has-subkind* ?kind ?subsubkind)
                         (has-subkind ?kind ?subkind)
                         (has-subkind* ?subkind ?subsubkind))
@@ -824,7 +822,7 @@
           (assert<-_ assn)))
     (is (= [true]
            (query true '((evals-from? ?kind (quote thing))
-                         (or (has-kind* ?instance ?kind)
+                         (or (has-kind ?instance ?kind)
                              (and (has-subkind* ?kind ?subkind)
                                   (has-kind ?instance ?subkind)))))))
     ))

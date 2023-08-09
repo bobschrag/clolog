@@ -92,12 +92,6 @@
        'non-ground-complex
        (first head)))))
 
-;;; Not checking for duplicate/subsumed assertions---which we really don't want.
-;;; But, if submitted, should we...
-;;; - [Warn and] keep the original, in order?
-;;; - [Warn and] keep the latest?
-;;; - Just barf?
-;;; Consider for FUTURE.
 (defn assert<- [assertion]
   "Add `assertion` to the knowledge base.  If the assertion's head
   statement has a constant predicate and fixed arity, place `assertion's`
@@ -175,7 +169,7 @@
       (assert<- assertion))))
 
 (defmacro <-_ [& assertion]
-  "The macro version of function `assert<-least`."
+  "The macro version of function `assert<-_`."
   `(assert<-_ (quote ~assertion)))
 
 (declare predicate-arity-assertions)
@@ -1140,7 +1134,6 @@
       ;; Display answer info.
       (when *leash*
         (case adjudication
-          ;; FUTURE: Print literal answers (e.g., "quoted strings").
           nil (println "Recorded answer:" answer) ; Happens when not discarding subsumed.
           :different (println "Recorded answer:" answer)
           :equivalent (println "Duplicate answer (not recorded):" answer)
@@ -1200,6 +1193,7 @@
       (println prefix "Succeeded" (str (pr-str signature) \:)
                (de-reference bindings head)))))
 
+;;; Disabled.
 (defn- leash-assertion-body [special-form-depth assn-index head body goal bindings]
   (comment ; Disable.
     (when (and goal *leash*)
@@ -1227,7 +1221,7 @@
       ;; (println goal-prefix "bindings<:" bindings<)
       (println assn-prefix "Matched head"
                (cl-format nil "~s:" head)
-               (de-reference bindings head)))))
+               (cl-format nil "~s" (de-reference bindings head))))))
 
 (defn- leash-assertion-backtracking [special-form-depth index goal bindings]
   (when *leash*
@@ -1235,7 +1229,7 @@
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
       (println prefix "Backtracking into" (str (pr-str signature) \:)
-               goal))))
+               (cl-format nil "~s" goal)))))
 
 (defn- leash-failure [special-form-depth index goal bindings]
   (when *leash*
@@ -1243,7 +1237,7 @@
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
       (println prefix "Failed" (str (pr-str signature) \:)
-               goal))))
+               (cl-format nil "~s" goal)))))
 
 (defn- leash-goal [special-form-depth index goal bindings]
   (when (and goal *leash*)
@@ -1251,7 +1245,7 @@
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
       (println prefix "Entering" (str (pr-str signature) \:)
-               goal))))
+               (cl-format nil "~s" goal)))))
 
 (defn- standard-split
   "Split `s` at whitespace chars, returning a vec of (unnormalized)
@@ -2134,7 +2128,7 @@
 (defn- leash-query [special-form-depth index verb input-goals]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)]
-      (println prefix verb "query:" input-goals))))
+      (println prefix verb "query:" (cl-format nil "~s" input-goals)))))
 
 ;;; For creation of tests/clolog/leash-tests.txt.
 (def ^:private ^:dynamic *transcribe-query-info* false)

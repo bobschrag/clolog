@@ -24,3 +24,6 @@
 	`assert<-_`
 	`<-_`
 
+	## next
+
+	- Improved leashing, distinguishing string terms.

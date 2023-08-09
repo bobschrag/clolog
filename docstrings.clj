@@ -78,7 +78,7 @@
   )
 
 (defmacro <-_ [& assertion]
-  "The macro version of function `assert<-least`."
+  "The macro version of function `assert<-_`."
   `(assert<-least (quote ~assertion)))
 
 ;;; Predicate transform (AKA logic macro) facility:

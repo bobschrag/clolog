@@ -404,10 +404,12 @@
                     ;; and of `head`.
                     bindings? (and goal head
                                    (match (de-reference bindings goal unindexed?)
-                                          (de-reference bindings head unindexed?)
+                                          head
                                           bindings))]
                 (when bindings?
                   (list [assertion bindings?]))))
+            ;; Indexifying an already-indexified goal is a no-op (but
+            ;; in future we might clean this up).
             (candidate-assertions (indexify goal 0)))))
 
 (defn get-matching-head-assertions [statement-pattern]
@@ -943,6 +945,16 @@
     (vec (rest seq-or-vec))
     (rest seq-or-vec)))
 
+;;; Diagnostic:
+(def check-unify-indices true)
+
+(defn- check-unify-indices [a b]
+  (let [a-i?vars (i?vars-of a)
+        a-indices (set (map :index a-i?vars))
+        b-i?vars (i?vars-of b)
+        b-indices (set (map :index b-i?vars))]
+    (assert (empty? (set/intersection a-indices b-indices)))))
+
 (defn- unify
   ([a b] ; Terms (or statements, assertions, ...).
    (unify a b [{} {}]))
@@ -952,6 +964,9 @@
    (let [is-?var? (if indexed? i?var? ?var?)
          is-anonymous-?var? (if indexed? anonymous-i?var? anonymous-?var?)
          updated (if indexed? i?var-updated-bindings updated-bindings)]
+     ;; TODO: Remove, upon QA.  (Needed for `(same ?x ?x)` etc.)
+     (when (and indexed? check-unify-indices)
+       (check-unify-indices a b))
      ;; (do (pprint "unify:") (pprint bindings) (pprint a) (pprint b))
      (if (or (and (= a []) (= b []))
              (and (= a ()) (= b ())))
@@ -1191,9 +1206,9 @@
     (let [prefix (leash-prefix special-form-depth index)
           signature (goal-signature head)]
       (println prefix "Succeeded" (str (pr-str signature) \:)
-               (de-reference bindings head)))))
+               (cl-format nil "~s" (de-reference bindings head))))))
 
-;;; Disabled.
+;;; Disabled (not maintained).
 (defn- leash-assertion-body [special-form-depth assn-index head body goal bindings]
   (comment ; Disable.
     (when (and goal *leash*)
@@ -1419,6 +1434,8 @@
               (with-body-remainder body-remainder
                 (let [capos (cons capo capos)
                       goal (first goals)
+                      goal-index body-index
+                      assn-index (inc goal-index)
                       assertion-matches (goal-assertion-matches assn-index goal bindings)
                       goals (rest goals) ; Gathered into body remainder.
                       ;; FYI: continuation continuation
@@ -2030,6 +2047,9 @@
               body-remainders (rest body-remainders)]
           (with-body-remainder body-remainder
             (let [goal-index body-index ; Gathered into stack frame.
+                  assn-index (inc goal-index)
+                  ;; Lose succeeded assertion's now-stale entries.
+                  bindings (dissoc bindings assn-index)
                   goal (first goals)
                   goals (rest goals)
                   assertion-matches (when-not assertion-matches ; Respect an empty coll.

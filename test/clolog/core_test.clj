@@ -806,25 +806,41 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
-    ;; For token-matcher:
+    ;; For kanl:
     (do (initialize-prolog)
-        (doseq [assn '[((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
+        (doseq [assn '[((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
+                       ((has-kind* ?instance ?kind)
+                        (has-subkind* ?kind ?subkind)
+                        (has-kind ?instance ?subkind))
+                       ((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
                        ((has-subkind* ?kind ?subsubkind)
                         (has-subkind ?kind ?subkind)
                         (has-subkind* ?subkind ?subsubkind))
                        ((supports-subject-type ?predicate ?subtype)
                         (supports-subject-type ?predicate ?type)
                         (has-subkind ?type ?subtype))
+                       ((supports-subject-type "allowed to use" "person"))
+                       ((supports-subject-type "permissioned to" "person"))
                        ((supports-object-type ?predicate ?subtype)
                         (supports-object-type ?predicate ?type)
-                        (has-subkind ?type ?subtype))
-                       ((has-kind ?instance ?type))]]
+                        (has-subkind* ?type ?subtype))
+                       ((supports-object-type "allowed to use" "resource"))
+                       ((supports-object-type "permissioned to" "resource"))
+                       (("allowed to use" ?person ?resource)
+                        ("permissioned to" ?person ?resource))
+                       (("allowed to use" ?person ?resource)
+                        (not ((neg "allowed to use") ?person ?resource))
+                        (not (has-kind* ?resource "restricted resource")))
+                       ((has-subkind "restricted resource" "resource"))
+                       ((has-kind "Bob" "person"))
+                       ((has-kind "Repo 2" "resource"))]]
           (assert<-_ assn)))
-    (is (= [true]
-           (query true '((evals-from? ?kind (quote thing))
-                         (or (has-kind ?instance ?kind)
-                             (and (has-subkind* ?kind ?subkind)
-                                  (has-kind ?instance ?subkind)))))))
+    (is (= '[["Bob" "Repo 2"]]
+           (binding [*leash* true]
+             (query '[?subject ?object]
+                    '((has-kind* ?subject "person")
+                      (has-kind* ?object "resource")
+                      ("allowed to use" ?subject ?object))))))
     ))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.

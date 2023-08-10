@@ -666,6 +666,11 @@
   ([bindings term]
    (de-reference bindings term false))
   ([bindings term unindexed?]
+   (de-reference bindings term unindexed?
+                 (and (not unindexed?)
+                      (i?var? term)
+                      :de-referencing-i?var)))
+  ([bindings term unindexed? de-referencing-i?var?]
    ;; Stop when you get to a non-?var or to a ?var with no binding.
    ;; Per the "push-up" strategy, we should never have to traverse
    ;; more than one hop of indirection here.
@@ -682,7 +687,11 @@
            term
 
            (is-?var? val)
-           (de-reference bindings val unindexed?)
+           (if de-referencing-i?var?
+             ;; In our "push-up" design, if you de-reference an i?var
+             ;; to another i?var, the latter is the value you want.
+             val
+             (de-reference bindings val unindexed?))
 
            (and (or (seq? val) (vector? val))
                 (not (empty? val)))
@@ -946,14 +955,20 @@
     (rest seq-or-vec)))
 
 ;;; Diagnostic:
-(def check-unify-indices true)
+(def check-unify-indices? false)
 
+;;; We always have a:goal b:assertion head (both indexified), so we
+;;; should have the asserted condition.
 (defn- check-unify-indices [a b]
   (let [a-i?vars (i?vars-of a)
-        a-indices (set (map :index a-i?vars))
-        b-i?vars (i?vars-of b)
-        b-indices (set (map :index b-i?vars))]
-    (assert (empty? (set/intersection a-indices b-indices)))))
+        a-max-index (when (seq a-i?vars)
+                      (apply max (map :index a-i?vars)))
+        b-i?vars (when a-max-index (i?vars-of b))
+        ;; We expect these indices all to be the same (`assn-index`).
+        b-min-index (when (seq b-i?vars)
+                      (apply min (map :index b-i?vars)))]
+    (when b-min-index
+      (assert (<= a-max-index b-min-index)))))
 
 (defn- unify
   ([a b] ; Terms (or statements, assertions, ...).
@@ -965,7 +980,7 @@
          is-anonymous-?var? (if indexed? anonymous-i?var? anonymous-?var?)
          updated (if indexed? i?var-updated-bindings updated-bindings)]
      ;; TODO: Remove, upon QA.  (Needed for `(same ?x ?x)` etc.)
-     (when (and indexed? check-unify-indices)
+     (when (and indexed? check-unify-indices?)
        (check-unify-indices a b))
      ;; (do (pprint "unify:") (pprint bindings) (pprint a) (pprint b))
      (if (or (and (= a []) (= b []))
@@ -1131,19 +1146,9 @@
   standard output."
   false)
 
-(defn- de-self-reference [answer-bindings]
-  ;; Remove entries (at index 0) that have `:index` 0---avoid spurious
-  ;; de-referencing (and stack overflow).
-  (let [filtered (into {}
-                       (filter (fn [[?var i?var]]
-                                 (not= (:index i?var) 0))
-                               (get answer-bindings 0)))]
-    (assoc {} 0 filtered)))
-
 (defn- handle-answer [bindings]
   ;; Not penetrating sets, maps, ...  Consider walking?
-  (let [bindings (de-self-reference bindings)
-        answer (de-reference bindings *answer-template*)
+  (let [answer (de-reference bindings *answer-template*)
         answer (unindexify answer 0)]
     (let [adjudication (adjudicate-answer answer)]
       ;; Display answer info.
@@ -1191,6 +1196,7 @@
         prefix (str pad index \.)]
     prefix))
 
+;;; TODO: Lose "\"pred\"" ==> "pred".
 (defn- goal-signature [goal]
   (if-not (?var? goal)
     (str (pr-str (first goal)) "/" (dec (count goal)))

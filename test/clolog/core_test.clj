@@ -326,7 +326,7 @@
            (query '?r '((successor ?q ?r)))))
     (do (initialize-prolog)
         (assert<- '((pseudo-same ?x ?x))))
-    (is (= '[[?q ?r]]
+    (is (= '[[?r ?r]]
            (query '[?q ?r] '((pseudo-same ?q ?r)))))
     (is (= '[?x]
            (query '?x '((pseudo-same ?x ?x)))))
@@ -809,9 +809,9 @@
     ;; For kanl:
     (do (initialize-prolog)
         (doseq [assn '[((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
-                       ((has-kind* ?instance ?kind)
+                       ((has-kind* ?instance ?subkind)
                         (has-subkind* ?kind ?subkind)
-                        (has-kind ?instance ?subkind))
+                        (has-kind ?instance ?kind))
                        ((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
                        ((has-subkind* ?kind ?subsubkind)
                         (has-subkind ?kind ?subkind)
@@ -819,28 +819,27 @@
                        ((supports-subject-type ?predicate ?subtype)
                         (supports-subject-type ?predicate ?type)
                         (has-subkind ?type ?subtype))
-                       ((supports-subject-type "allowed to use" "person"))
-                       ((supports-subject-type "permissioned to" "person"))
+                       ((supports-subject-type "compatible with" "action"))
+                       ((supports-subject-type "non-destructive to" "action"))
                        ((supports-object-type ?predicate ?subtype)
                         (supports-object-type ?predicate ?type)
                         (has-subkind* ?type ?subtype))
-                       ((supports-object-type "allowed to use" "resource"))
-                       ((supports-object-type "permissioned to" "resource"))
-                       (("allowed to use" ?person ?resource)
-                        ("permissioned to" ?person ?resource))
-                       (("allowed to use" ?person ?resource)
-                        (not ((neg "allowed to use") ?person ?resource))
-                        (not (has-kind* ?resource "restricted resource")))
-                       ((has-subkind "restricted resource" "resource"))
-                       ((has-kind "Bob" "person"))
-                       ((has-kind "Repo 2" "resource"))]]
+                       ((supports-object-type "compatible with" "item"))
+                       ((supports-object-type "non-destructive to" "item"))
+                       (("compatible with" ?action ?item)
+                        ("non-destructive to" ?action ?item))
+                       (("compatible with" ?action ?item)
+                        (not ((neg "compatible with") ?action ?item))
+                        (not (has-kind* ?item "fragile item")))
+                       ((has-subkind "fragile item" "item"))
+                       ((has-kind "riveting" "action"))
+                       ((has-kind "I-beam 2" "item"))]]
           (assert<-_ assn)))
-    (is (= '[["Bob" "Repo 2"]]
-           (binding [*leash* true]
-             (query '[?subject ?object]
-                    '((has-kind* ?subject "person")
-                      (has-kind* ?object "resource")
-                      ("allowed to use" ?subject ?object))))))
+    (is (= '[["riveting" "I-beam 2"]]
+           (query '[?subject ?object]
+                  '((has-kind* ?subject "action")
+                    (has-kind* ?object "item")
+                    ("compatible with" ?subject ?object)))))
     ))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.

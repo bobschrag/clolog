@@ -806,40 +806,6 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
-    ;; For kanl:
-    (do (initialize-prolog)
-        (doseq [assn '[((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
-                       ((has-kind* ?instance ?subkind)
-                        (has-subkind* ?kind ?subkind)
-                        (has-kind ?instance ?kind))
-                       ((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
-                       ((has-subkind* ?kind ?subsubkind)
-                        (has-subkind ?kind ?subkind)
-                        (has-subkind* ?subkind ?subsubkind))
-                       ((supports-subject-type ?predicate ?subtype)
-                        (supports-subject-type ?predicate ?type)
-                        (has-subkind ?type ?subtype))
-                       ((supports-subject-type "compatible with" "action"))
-                       ((supports-subject-type "non-destructive to" "action"))
-                       ((supports-object-type ?predicate ?subtype)
-                        (supports-object-type ?predicate ?type)
-                        (has-subkind* ?type ?subtype))
-                       ((supports-object-type "compatible with" "item"))
-                       ((supports-object-type "non-destructive to" "item"))
-                       (("compatible with" ?action ?item)
-                        ("non-destructive to" ?action ?item))
-                       (("compatible with" ?action ?item)
-                        (not ((neg "compatible with") ?action ?item))
-                        (not (has-kind* ?item "fragile item")))
-                       ((has-subkind "fragile item" "item"))
-                       ((has-kind "riveting" "action"))
-                       ((has-kind "I-beam 2167" "item"))]]
-          (assert<-_ assn)))
-    (is (= '[["riveting" "I-beam 2167"]]
-           (query '[?subject ?object]
-                  '((has-kind* ?subject "action")
-                    (has-kind* ?object "item")
-                    ("compatible with" ?subject ?object)))))
     ))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.

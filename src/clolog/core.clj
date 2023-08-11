@@ -1343,6 +1343,8 @@
   `(let [~'capos (:capos ~body-remainder)
          ~'head (:head ~body-remainder)
          ~'body-index (:body-index ~body-remainder)
+         ;; Drop (stale) entries in `bindings` beyond `body-index`.
+         ~'bindings (into {} (filter #(<= (first %) ~'body-index) ~'bindings))
          ~'goals (:goals ~body-remainder)
          ~'special-form-stack (:special-form-stack ~body-remainder)
          ~'special-form-depth (:special-form-depth ~body-remainder)]
@@ -1380,7 +1382,7 @@
 
 ;;; We don't need `leash-special "Backtracking into"` for `and`.  We'll
 ;;; backtrack on the conjuncts, individually (when these have `or` or
-;;; user predicates).
+;;; assertion predicates).
 
 ;;; In arriving here, we've not disturbed `body-remainders`.  So, we
 ;;; could just append the conjuncts.  However, for leashing purposes,

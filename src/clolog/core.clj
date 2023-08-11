@@ -954,10 +954,10 @@
     (vec (rest seq-or-vec))
     (rest seq-or-vec)))
 
-;;; Diagnostic:
-(def check-indices? false)
+;;; Integrity check (for now):
+(def check-indices? true)
 
-;;; We always have a:goal b:assertion head (both indexified), so we
+;;; We always have a:goal b:assertion-head (both indexified), so we
 ;;; should have the asserted condition.
 (defn- check-unify-indices [a b]
   (let [a-i?vars (i?vars-of a)
@@ -1385,7 +1385,7 @@
 ;;; In arriving here, we've not disturbed `body-remainders`.  So, we
 ;;; could just append the conjuncts.  However, for leashing purposes,
 ;;; we'd like to know when we're done with the `and`.  Such
-;;; considerations are manifold among these `process-...` functions.
+;;; considerations are pervasive among these `process-...` functions.
 (defn- process-and-frame [stack-frame]
   (when debugging-stack?
     (pprint ["process-and-frame" stack-frame]))
@@ -1564,7 +1564,7 @@
           continuation (gather-stack-frame)
           ;; `first` content frame:
           goal first-goal
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
           goals `((~'succeed-first ~continuation)
@@ -1617,7 +1617,7 @@
     (leash-special special-form-depth goal-index "Taking 'else' branch of" special-form-stack bindings)
     (let [capo 'else
           goal (second goal) ; Lose `else`.
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
           goals (cons '(succeed-if) (:goals body-remainder))
@@ -1691,7 +1691,7 @@
     (leash-special special-form-depth goal-index "Taking 'then' branch of" special-form-stack bindings)
     (let [capo 'then
           goal (second goal) ; Lose `then`.
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           body-remainder (first body-remainders) ; Has at least `(drop-else ...)`.
           capos (:capos body-remainder)
           goals (:goals body-remainder)
@@ -1711,7 +1711,7 @@
           then-form (nth goal 2)
           then-goal `(~'then ~then-form)
           goal condition-form
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           else-frame continuation
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
@@ -2049,6 +2049,7 @@
               capos () ; Diagnostic.
               goals (rest goals)
               goal-index assn-index
+              assn-index (inc assn-index)
               body-index assn-index ; Gathered into body remainder.
               assertion-matches (goal-assertion-matches
                                  assn-index goal bindings)

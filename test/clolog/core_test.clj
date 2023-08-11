@@ -694,14 +694,14 @@
                                              (evals-from? ?x true)
                                              (evals-from? ?x false))))))
     (is (= '[[?sibling false]]
-           (query '[?sibling false] '((cond% (sister ?sibling adam)
-                                             (evals-from? ?x 'adam)
+           (query '[?sibling ?x] '((cond% (sister ?sibling adam)
+                                          (evals-from? ?x 'adam)
 
-                                             (sister ?sibling eve)
-                                             (evals-from? ?x 'eve)
+                                          (sister ?sibling eve)
+                                          (evals-from? ?x 'eve)
 
-                                             :else
-                                             (evals-from? ?x false))))))
+                                          :else
+                                          (evals-from? ?x false))))))
     (is (= '[[?sibling ?sister]]
            (binding [*discard-subsumed-answers* true]
              (query '[?sibling ?sister]
@@ -721,14 +721,14 @@
     (is (= '[[?sibling false]]
            ;; Avoid backtracking into intended-transform predicates.
            (binding [*answer-count-limit* 1]
-             (query '[?sibling false] '((cond% (sister ?sibling adam)
-                                               (evals-from? ?x 'adam)
+             (query '[?sibling ?x] '((cond% (sister ?sibling adam)
+                                           (evals-from? ?x 'adam)
 
-                                               (sister ?sibling eve)
-                                               (evals-from? ?x 'eve)
+                                           (sister ?sibling eve)
+                                           (evals-from? ?x 'eve)
 
-                                               :else
-                                               (evals-from? ?x false)))))))
+                                           :else
+                                           (evals-from? ?x false)))))))
     (initialize-prolog)
     (is (= [true]
            (? true (ground [a b]))))
@@ -833,9 +833,9 @@
                         (not (has-kind* ?item "fragile item")))
                        ((has-subkind "fragile item" "item"))
                        ((has-kind "riveting" "action"))
-                       ((has-kind "I-beam 2" "item"))]]
+                       ((has-kind "I-beam 2167" "item"))]]
           (assert<-_ assn)))
-    (is (= '[["riveting" "I-beam 2"]]
+    (is (= '[["riveting" "I-beam 2167"]]
            (query '[?subject ?object]
                   '((has-kind* ?subject "action")
                     (has-kind* ?object "item")

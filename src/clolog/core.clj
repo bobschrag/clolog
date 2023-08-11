@@ -92,12 +92,6 @@
        'non-ground-complex
        (first head)))))
 
-;;; Not checking for duplicate/subsumed assertions---which we really don't want.
-;;; But, if submitted, should we...
-;;; - [Warn and] keep the original, in order?
-;;; - [Warn and] keep the latest?
-;;; - Just barf?
-;;; Consider for FUTURE.
 (defn assert<- [assertion]
   "Add `assertion` to the knowledge base.  If the assertion's head
   statement has a constant predicate and fixed arity, place `assertion's`
@@ -175,7 +169,7 @@
       (assert<- assertion))))
 
 (defmacro <-_ [& assertion]
-  "The macro version of function `assert<-least`."
+  "The macro version of function `assert<-_`."
   `(assert<-_ (quote ~assertion)))
 
 (declare predicate-arity-assertions)
@@ -410,10 +404,12 @@
                     ;; and of `head`.
                     bindings? (and goal head
                                    (match (de-reference bindings goal unindexed?)
-                                          (de-reference bindings head unindexed?)
+                                          head
                                           bindings))]
                 (when bindings?
                   (list [assertion bindings?]))))
+            ;; Indexifying an already-indexified goal is a no-op (but
+            ;; in future we might clean this up).
             (candidate-assertions (indexify goal 0)))))
 
 (defn get-matching-head-assertions [statement-pattern]
@@ -670,6 +666,11 @@
   ([bindings term]
    (de-reference bindings term false))
   ([bindings term unindexed?]
+   (de-reference bindings term unindexed?
+                 (and (not unindexed?)
+                      (i?var? term)
+                      :de-referencing-i?var)))
+  ([bindings term unindexed? de-referencing-i?var?]
    ;; Stop when you get to a non-?var or to a ?var with no binding.
    ;; Per the "push-up" strategy, we should never have to traverse
    ;; more than one hop of indirection here.
@@ -686,7 +687,11 @@
            term
 
            (is-?var? val)
-           (de-reference bindings val unindexed?)
+           (if de-referencing-i?var?
+             ;; In our "push-up" design, if you de-reference an i?var
+             ;; to another i?var, the latter is the value you want.
+             val
+             (de-reference bindings val unindexed?))
 
            (and (or (seq? val) (vector? val))
                 (not (empty? val)))
@@ -949,6 +954,22 @@
     (vec (rest seq-or-vec))
     (rest seq-or-vec)))
 
+;;; Integrity check (for now):
+(def check-indices? true)
+
+;;; We always have a:goal b:assertion-head (both indexified), so we
+;;; should have the asserted condition.
+(defn- check-unify-indices [a b]
+  (let [a-i?vars (i?vars-of a)
+        a-max-index (when (seq a-i?vars)
+                      (apply max (map :index a-i?vars)))
+        b-i?vars (when a-max-index (i?vars-of b))
+        ;; We expect these indices all to be the same (`assn-index`).
+        b-min-index (when (seq b-i?vars)
+                      (apply min (map :index b-i?vars)))]
+    (when b-min-index
+      (assert (<= a-max-index b-min-index)))))
+
 (defn- unify
   ([a b] ; Terms (or statements, assertions, ...).
    (unify a b [{} {}]))
@@ -958,6 +979,9 @@
    (let [is-?var? (if indexed? i?var? ?var?)
          is-anonymous-?var? (if indexed? anonymous-i?var? anonymous-?var?)
          updated (if indexed? i?var-updated-bindings updated-bindings)]
+     ;; TODO: Remove, upon QA.  (Needed for `(same ?x ?x)` etc.)
+     (when (and indexed? check-indices?)
+       (check-unify-indices a b))
      ;; (do (pprint "unify:") (pprint bindings) (pprint a) (pprint b))
      (if (or (and (= a []) (= b []))
              (and (= a ()) (= b ())))
@@ -1122,25 +1146,14 @@
   standard output."
   false)
 
-(defn- de-self-reference [answer-bindings]
-  ;; Remove entries (at index 0) that have `:index` 0---avoid spurious
-  ;; de-referencing (and stack overflow).
-  (let [filtered (into {}
-                       (filter (fn [[?var i?var]]
-                                 (not= (:index i?var) 0))
-                               (get answer-bindings 0)))]
-    (assoc {} 0 filtered)))
-
 (defn- handle-answer [bindings]
   ;; Not penetrating sets, maps, ...  Consider walking?
-  (let [bindings (de-self-reference bindings)
-        answer (de-reference bindings *answer-template*)
+  (let [answer (de-reference bindings *answer-template*)
         answer (unindexify answer 0)]
     (let [adjudication (adjudicate-answer answer)]
       ;; Display answer info.
       (when *leash*
         (case adjudication
-          ;; FUTURE: Print literal answers (e.g., "quoted strings").
           nil (println "Recorded answer:" answer) ; Happens when not discarding subsumed.
           :different (println "Recorded answer:" answer)
           :equivalent (println "Duplicate answer (not recorded):" answer)
@@ -1185,8 +1198,8 @@
 
 (defn- goal-signature [goal]
   (if-not (?var? goal)
-    (str (pr-str (first goal)) "/" (dec (count goal)))
-    (pr-str goal)))
+    (cl-format nil "`~s`/~d:" (first goal) (dec (count goal)))
+    (cl-format nil "`~s`:" goal)))
 
 (defn- leash-->?-transform [special-form-depth index]
   (when *leash*
@@ -1197,9 +1210,10 @@
   (when (and head *leash*) ; Top-level query has no head.
     (let [prefix (leash-prefix special-form-depth index)
           signature (goal-signature head)]
-      (println prefix "Succeeded" (str (pr-str signature) \:)
-               (de-reference bindings head)))))
+      (println prefix "Succeeded" signature
+               (cl-format nil "~s" (de-reference bindings head))))))
 
+;;; Disabled (not maintained).
 (defn- leash-assertion-body [special-form-depth assn-index head body goal bindings]
   (comment ; Disable.
     (when (and goal *leash*)
@@ -1227,31 +1241,31 @@
       ;; (println goal-prefix "bindings<:" bindings<)
       (println assn-prefix "Matched head"
                (cl-format nil "~s:" head)
-               (de-reference bindings head)))))
+               (cl-format nil "~s" (de-reference bindings head))))))
 
 (defn- leash-assertion-backtracking [special-form-depth index goal bindings]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Backtracking into" (str (pr-str signature) \:)
-               goal))))
+      (println prefix "Backtracking into" signature
+               (cl-format nil "~s" goal)))))
 
 (defn- leash-failure [special-form-depth index goal bindings]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Failed" (str (pr-str signature) \:)
-               goal))))
+      (println prefix "Failed" signature
+               (cl-format nil "~s" goal)))))
 
 (defn- leash-goal [special-form-depth index goal bindings]
   (when (and goal *leash*)
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Entering" (str (pr-str signature) \:)
-               goal))))
+      (println prefix "Entering" signature
+               (cl-format nil "~s" goal)))))
 
 (defn- standard-split
   "Split `s` at whitespace chars, returning a vec of (unnormalized)
@@ -1348,7 +1362,7 @@
      ~@body))
 
 ;;; Should be private in production.
-(def ^:private debugging-stack nil)
+(def ^:private debugging-stack? nil)
 
 (declare process-stack-frame)
 
@@ -1371,9 +1385,9 @@
 ;;; In arriving here, we've not disturbed `body-remainders`.  So, we
 ;;; could just append the conjuncts.  However, for leashing purposes,
 ;;; we'd like to know when we're done with the `and`.  Such
-;;; considerations are manifold among these `process-...` functions.
+;;; considerations are pervasive among these `process-...` functions.
 (defn- process-and-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-and-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [and-form goal
@@ -1425,6 +1439,8 @@
               (with-body-remainder body-remainder
                 (let [capos (cons capo capos)
                       goal (first goals)
+                      goal-index body-index
+                      assn-index (inc goal-index)
                       assertion-matches (goal-assertion-matches assn-index goal bindings)
                       goals (rest goals) ; Gathered into body remainder.
                       ;; FYI: continuation continuation
@@ -1440,7 +1456,7 @@
               #(process-stack-frame continuation))))))))
 
 (defn- process-or-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-or-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [or-form goal
@@ -1504,14 +1520,14 @@
        #(process-answer-and-continue))))
 
 (defn- process-fail-first-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-fail-first-frame" stack-frame]))
   (with-stack-frame stack-frame
     (leash-special special-form-depth goal-index "Failed" special-form-stack bindings)
     #(process-stack-frame continuation)))
 
 (defn- process-succeed-first-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-succeed-first-frame" stack-frame]))
   (with-stack-frame stack-frame
     (leash-special special-form-depth goal-index "Succeeded, cutting" special-form-stack bindings)
@@ -1537,7 +1553,7 @@
 ;;; potentially wasteful---ultimately disregarded) "or" parallelism
 ;;; within the scope of its choice point.
 (defn- process-first-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-first-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'first
@@ -1548,7 +1564,7 @@
           continuation (gather-stack-frame)
           ;; `first` content frame:
           goal first-goal
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
           goals `((~'succeed-first ~continuation)
@@ -1565,14 +1581,14 @@
 ;;; frames.
 
 (defn- process-fail-if-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-fail-if-frame" stack-frame]))
   (with-stack-frame stack-frame
     (leash-special special-form-depth goal-index "Failed" special-form-stack bindings)
     #(process-stack-frame continuation)))
 
 (defn- process-succeed-if-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-succeed-if-frame" stack-frame]))
   (with-stack-frame stack-frame
     (leash-special special-form-depth goal-index "Succeeded" special-form-stack bindings)
@@ -1594,14 +1610,14 @@
 
 ;;; Unpile piled continuations, post-slice.
 (defn- process-else-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-else-frame" stack-frame]))
   (with-stack-frame stack-frame
     ;; FUTURE: Have leash print at most the else branch.
     (leash-special special-form-depth goal-index "Taking 'else' branch of" special-form-stack bindings)
     (let [capo 'else
           goal (second goal) ; Lose `else`.
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
           goals (cons '(succeed-if) (:goals body-remainder))
@@ -1651,7 +1667,7 @@
                                (conj pile continuation))))))
 
 (defn- process-drop-else-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-drop-else-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'drop-else
@@ -1668,14 +1684,14 @@
          #(process-stack-frame (gather-stack-frame))))))
 
 (defn- process-then-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-then-frame" stack-frame]))
   (with-stack-frame stack-frame
     ;; FUTURE: Have leash print at most the then branch.
     (leash-special special-form-depth goal-index "Taking 'then' branch of" special-form-stack bindings)
     (let [capo 'then
           goal (second goal) ; Lose `then`.
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           body-remainder (first body-remainders) ; Has at least `(drop-else ...)`.
           capos (:capos body-remainder)
           goals (:goals body-remainder)
@@ -1685,7 +1701,7 @@
        #(process-stack-frame (gather-stack-frame))))))
 
 (defn- process-if-then-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-if-then-frame" stack-frame]))
   (with-stack-frame stack-frame
     ;; FUTURE: Have leash print at most the condition.
@@ -1695,7 +1711,7 @@
           then-form (nth goal 2)
           then-goal `(~'then ~then-form)
           goal condition-form
-          assertion-matches (goal-assertion-matches goal-index goal bindings)
+          assertion-matches (goal-assertion-matches (inc goal-index) goal bindings)
           else-frame continuation
           body-remainder (first body-remainders)
           capos (:capos body-remainder)
@@ -1712,7 +1728,7 @@
        #(process-stack-frame (gather-stack-frame))))))
 
 (defn- process-if-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-if-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [if-form (nth goal 1) ; (second goal)
@@ -1741,7 +1757,7 @@
 ;;; recursively, we can get away with assuming any template's index is
 ;;; 0.  See `handle-answer`.
 (defn- process-not-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-not-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'not
@@ -1760,7 +1776,7 @@
             #(process-stack-frame continuation))))))
 
 (defn- process-true-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-true-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'true
@@ -1770,7 +1786,7 @@
       (succeed-simple-special-form))))
 
 (defn- process-false-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-false-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [goal nil]
@@ -1779,7 +1795,7 @@
       #(process-stack-frame continuation))))
 
 (defn- process-truthy?-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-truthy?-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'truthy?
@@ -1800,7 +1816,7 @@
           #(process-stack-frame continuation))))))
 
 (defn- process-var-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-var-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'var
@@ -1815,7 +1831,7 @@
             #(process-stack-frame continuation))))))
 
 (defn- process-ground-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-ground-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'var
@@ -1830,7 +1846,7 @@
             #(process-stack-frame continuation))))))
 
 (defn- process-do-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-do-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'do
@@ -1846,7 +1862,7 @@
             #(process-stack-frame continuation))))))
 
 (defn- process-evals-from?-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-evals-from?-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'evals-from?
@@ -1874,7 +1890,7 @@
             #(process-stack-frame continuation))))))
 
 (defn- process-same-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-same-frame" stack-frame]))
   (with-stack-frame stack-frame
     (let [capo 'same
@@ -1975,8 +1991,31 @@
         true #(process-true-frame stack-frame)
         false #(process-false-frame stack-frame)))))
 
+(defn- check-assertion-indices [goal-index goal assn-index assn bindings]
+  (let [bindings-indices (keys bindings)
+        bindings-max-index (when (seq bindings-indices)
+                             (apply max bindings-indices))
+        goal-i?vars (i?vars-of goal)
+        goal-max-index (when (seq goal-i?vars)
+                         (apply max (map :index goal-i?vars)))
+        assn-i?vars (when goal-max-index (i?vars-of assn))
+        ;; We expect these indices all to be the same (`assn-index`).
+        assn-min-index (when (seq assn-i?vars)
+                         (apply min (map :index assn-i?vars)))]
+    (when bindings-max-index
+      (assert (<= bindings-max-index assn-index))
+      (assert (= assn-index (inc goal-index)))
+      (when goal-max-index
+        (assert (<= goal-max-index goal-index))))
+    (when assn-min-index
+      ;; Some redundancy here...
+      (assert (= assn-min-index assn-index))
+      (when goal-max-index
+        (assert (> assn-min-index goal-max-index))
+        (assert (<= goal-max-index assn-min-index))))))
+
 (defn- process-predicate-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-predicate-frame:" stack-frame]))
   (with-stack-frame stack-frame
     (if-not (seq assertion-matches)
@@ -1997,6 +2036,8 @@
             continuation (gather-stack-frame)
             bindings match-bindings
             head (first assertion)]
+        (when check-indices?
+          (check-assertion-indices goal-index goal assn-index assertion bindings))
         (when-not (backtracking-leash-report? (:leash-report stack-frame)
                                               assn-index)
           (leash-goal special-form-depth assn-index goal bindings)
@@ -2008,6 +2049,7 @@
               capos () ; Diagnostic.
               goals (rest goals)
               goal-index assn-index
+              assn-index (inc assn-index)
               body-index assn-index ; Gathered into body remainder.
               assertion-matches (goal-assertion-matches
                                  assn-index goal bindings)
@@ -2022,7 +2064,7 @@
 ;;; (So, we're not accommodating ?vars introduced by `evals-from?`
 ;;; forms---which would require `rename-unbound-?vars`).
 (defn- process-assertion-success [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-assertion-success:" stack-frame]))
   (with-stack-frame stack-frame
     (leash-assertion-success special-form-depth goal-index head bindings)
@@ -2036,6 +2078,9 @@
               body-remainders (rest body-remainders)]
           (with-body-remainder body-remainder
             (let [goal-index body-index ; Gathered into stack frame.
+                  assn-index (inc goal-index)
+                  ;; Lose succeeded assertion's now-stale entries.
+                  bindings (dissoc bindings assn-index)
                   goal (first goals)
                   goals (rest goals)
                   assertion-matches (when-not assertion-matches ; Respect an empty coll.
@@ -2091,7 +2136,7 @@
   (def ^:dynamic *stack-index-limit* 1000))
 
 (defn- process-stack-frame [stack-frame]
-  (when debugging-stack
+  (when debugging-stack?
     (pprint ["process-stack-frame" stack-frame]))
   (with-stack-frame stack-frame
     ;; Not working as expected.
@@ -2126,7 +2171,7 @@
                                             ;; If we've gotten here from a special
                                             ;; stack frame, we won't yet have
                                             ;; fetched our assertion matches.
-                                            (goal-assertion-matches (inc (inc goal-index))
+                                            (goal-assertion-matches (inc goal-index)
                                                                    goal bindings)
                                             assertion-matches)]
                     #(process-predicate-frame (gather-stack-frame)))))))))))
@@ -2134,7 +2179,7 @@
 (defn- leash-query [special-form-depth index verb input-goals]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)]
-      (println prefix verb "query:" input-goals))))
+      (println prefix verb "query:" (cl-format nil "~s" input-goals)))))
 
 ;;; For creation of tests/clolog/leash-tests.txt.
 (def ^:private ^:dynamic *transcribe-query-info* false)

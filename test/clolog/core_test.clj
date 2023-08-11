@@ -326,7 +326,7 @@
            (query '?r '((successor ?q ?r)))))
     (do (initialize-prolog)
         (assert<- '((pseudo-same ?x ?x))))
-    (is (= '[[?q ?r]]
+    (is (= '[[?r ?r]]
            (query '[?q ?r] '((pseudo-same ?q ?r)))))
     (is (= '[?x]
            (query '?x '((pseudo-same ?x ?x)))))
@@ -694,14 +694,14 @@
                                              (evals-from? ?x true)
                                              (evals-from? ?x false))))))
     (is (= '[[?sibling false]]
-           (query '[?sibling false] '((cond% (sister ?sibling adam)
-                                             (evals-from? ?x 'adam)
+           (query '[?sibling ?x] '((cond% (sister ?sibling adam)
+                                          (evals-from? ?x 'adam)
 
-                                             (sister ?sibling eve)
-                                             (evals-from? ?x 'eve)
+                                          (sister ?sibling eve)
+                                          (evals-from? ?x 'eve)
 
-                                             :else
-                                             (evals-from? ?x false))))))
+                                          :else
+                                          (evals-from? ?x false))))))
     (is (= '[[?sibling ?sister]]
            (binding [*discard-subsumed-answers* true]
              (query '[?sibling ?sister]
@@ -721,14 +721,14 @@
     (is (= '[[?sibling false]]
            ;; Avoid backtracking into intended-transform predicates.
            (binding [*answer-count-limit* 1]
-             (query '[?sibling false] '((cond% (sister ?sibling adam)
-                                               (evals-from? ?x 'adam)
+             (query '[?sibling ?x] '((cond% (sister ?sibling adam)
+                                           (evals-from? ?x 'adam)
 
-                                               (sister ?sibling eve)
-                                               (evals-from? ?x 'eve)
+                                           (sister ?sibling eve)
+                                           (evals-from? ?x 'eve)
 
-                                               :else
-                                               (evals-from? ?x false)))))))
+                                           :else
+                                           (evals-from? ?x false)))))))
     (initialize-prolog)
     (is (= [true]
            (? true (ground [a b]))))
@@ -806,10 +806,12 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
-    ;; For token-matcher:
+    ;; For kanl:
     (do (initialize-prolog)
-        (doseq [assn '[((has-kind* ?instance thing) (has-kind ?instance thing))
-                       ((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
+        (doseq [assn '[((has-kind* ?instance ?kind) (has-kind ?instance ?kind))
+                       ((has-kind* ?instance ?subkind)
+                        (has-subkind* ?kind ?subkind)
+                        (has-kind ?instance ?kind))
                        ((has-subkind* ?kind ?subkind) (has-subkind ?kind ?subkind))
                        ((has-subkind* ?kind ?subsubkind)
                         (has-subkind ?kind ?subkind)
@@ -817,16 +819,27 @@
                        ((supports-subject-type ?predicate ?subtype)
                         (supports-subject-type ?predicate ?type)
                         (has-subkind ?type ?subtype))
+                       ((supports-subject-type "compatible with" "action"))
+                       ((supports-subject-type "non-destructive to" "action"))
                        ((supports-object-type ?predicate ?subtype)
                         (supports-object-type ?predicate ?type)
-                        (has-subkind ?type ?subtype))
-                       ((has-kind ?instance ?type))]]
+                        (has-subkind* ?type ?subtype))
+                       ((supports-object-type "compatible with" "item"))
+                       ((supports-object-type "non-destructive to" "item"))
+                       (("compatible with" ?action ?item)
+                        ("non-destructive to" ?action ?item))
+                       (("compatible with" ?action ?item)
+                        (not ((neg "compatible with") ?action ?item))
+                        (not (has-kind* ?item "fragile item")))
+                       ((has-subkind "fragile item" "item"))
+                       ((has-kind "riveting" "action"))
+                       ((has-kind "I-beam 2167" "item"))]]
           (assert<-_ assn)))
-    (is (= [true]
-           (query true '((evals-from? ?kind (quote thing))
-                         (or (has-kind* ?instance ?kind)
-                             (and (has-subkind* ?kind ?subkind)
-                                  (has-kind ?instance ?subkind)))))))
+    (is (= '[["riveting" "I-beam 2167"]]
+           (query '[?subject ?object]
+                  '((has-kind* ?subject "action")
+                    (has-kind* ?object "item")
+                    ("compatible with" ?subject ?object)))))
     ))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.

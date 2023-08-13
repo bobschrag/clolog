@@ -810,8 +810,6 @@ motivating use cases.
     `and`, `or` (e.g., indexing potentially like-predicate conjuncts,
     disjuncts).
 
-?  - Manifest distinction between failure (no match) and exhaustion (no assertions).
-
 - Potential enhancements to robustness and scale
 
   - Error-check user/application inputs more pervasively.

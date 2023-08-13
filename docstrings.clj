@@ -127,14 +127,6 @@
      (create-predicate-transform '((lispp ?form) (truthy? ?form)))
      )))
 
-;;; Make sure a using namespace gets public symbols (those not in
-;;; `clojure.core`) we have introduced for built-in predicates.
-(def truthy?)
-(def evals-from?)
-(def ground)
-(def same)
-(def ->?)
-
 (defn get-matching-head-assertions [statement-pattern]
   "Return a vector of the assertions whose heads match
   `statement-pattern`."

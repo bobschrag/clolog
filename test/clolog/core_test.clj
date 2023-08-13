@@ -465,6 +465,12 @@
            (query true '((or (pseudo-succeed))))))
     (is (= [true]
            (query true '((or (pseudo-fail) (pseudo-succeed))))))
+    ;; clolog's built-in predicates are simple symbols (not
+    ;; namespace-qualified)---two tests.
+    (is (= []
+           (query true '((clolog.core/or (pseudo-fail) (pseudo-succeed))))))
+    (is (= []
+           (query true '((clojure.core/or (pseudo-fail) (pseudo-succeed))))))
     (is (= []
            (query true '((or) (or)))))
     (is (= [true]

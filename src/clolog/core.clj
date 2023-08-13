@@ -287,14 +287,6 @@
                                                 same
                                                 true false})
 
-;;; Make sure a using namespace gets public symbols (those not in
-;;; `clojure.core`) we have introduced for built-in predicates.
-(def truthy?)
-(def evals-from?)
-(def ground)
-(def same)
-(def ->?)
-
 (defn- public-built-in-special-head? [head]
   (contains? public-built-in-special-heads head))
 

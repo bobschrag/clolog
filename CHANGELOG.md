@@ -24,6 +24,8 @@
 	`assert<-_`
 	`<-_`
 
-	## next
+	## [0.3.0]: 2023-08-14
 
-	- Improved leashing, distinguishing string terms.
+	- Important bug fixes (mediated by improved index integrity checking)
+	- Improved documentation
+	- Improved leashing distinguishing string predicates

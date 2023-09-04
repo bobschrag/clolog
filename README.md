@@ -60,7 +60,7 @@ goodies.
   expressions**
 
   ```clojure
-  > (do (<- (male laban))
+  > (do (<-- (male laban))
         (? ?y (male ?x) (evals-from? ?y (list '?x))))
   [(laban)]
   ```  
@@ -86,16 +86,20 @@ goodies.
    (same): Entering (same 1 1)
    (same): Succeeded (same 1 1)
   Recorded answer: true
-  Answer limit reached.
+  Answer limit reached. ; Because answer template `true` has no ?vars.
   [true]
   ```
   
-- **Built-in term matching predicate: `same`**
+- **Built-in term [non-]matching predicates: `same`, `different`**
 
   ```clojure
   > (? (?a ?b)
        (same [?a 2] [1 ?b]))
   [(1 2)]
+
+  > (? (?a ?b)
+       (different [?a 2] [1 ?b]))
+  []
   ```
 
 - **Built-in term inspection predicates: `var`, `ground`**
@@ -114,7 +118,7 @@ goodies.
 
   ```clojure
   > (? true (true))
-  true
+  [true]
   ```
 
   ```clojure
@@ -380,7 +384,7 @@ In production rules below, ...
 
 \<special-predicate\> :- \<built-in-predicate\> | \<transform-predicate\>
 
-\<built-in-predicate\> :- \<operator\> | \<Clojure-calling-predicate\> | `same` | `var` | `ground` | `true` | `false`
+\<built-in-predicate\> :- \<operator\> | \<Clojure-calling-predicate\> | `same` | `different` | `var` | `ground` | `true` | `false`
 
 \<operator\> :- `and` | `or` | `if` | `not` | `first`
 
@@ -464,10 +468,10 @@ matching for non-anonymous ?vars.  In matching (AKA "unification"),
 
 - Constants match equal (Clojure `=`) constants.
 
-- Complex terms match recursively.  Seqs match only seqs, vecs only vecs.
+- Complex terms match recursively.
 
 - A **tail ?var** (last in a statement or complex term, and preceded by
-  `&`) matches the (possibly empty) seq or list of terms remaining in
+  `&`) matches the (possibly empty) seq or vector of terms remaining in
   the parallel traversal of its opposing complex term.
 
 One term **subsumes** another if the two terms match and---considering

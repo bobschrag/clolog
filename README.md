@@ -694,6 +694,48 @@ Leashing also...
 - Indicates the nesting of built-in predicates for the current assertion
 - Left-pads reports per nesting of assertion and built-in predicate goals.
 
+When `*pprint-leash-statements*` is truthy, `"Entering"`,
+`"Succeeded"`, and `"Failed"` leash reports pprint (vs. print)
+statement content, starting on a new line, as in...
+
+```clojure
+clolog.core> (binding [*leash* true
+                       *pprint-leash-statements* true]
+               (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))
+0. Processing query: ((zebra ?h ?w ?z))
+ 1. Entering `zebra`/3:
+(zebra ?h:0 ?w:0 ?z:0)
+ 1. Matched head (zebra ?houses:1 ?w:1 ?z:1): (zebra ?h:0 ?w:0 ?z:0)
+  (same): Entering...
+(same
+ ?h:0
+ ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+  ?anon-4:1
+  (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+  ?anon-9:1
+  ?anon-10:1))
+  (same): Succeeded...
+(same
+ ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+  ?anon-4:1
+  (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+  ?anon-9:1
+  ?anon-10:1)
+ ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+  ?anon-4:1
+  (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+  ?anon-9:1
+  ?anon-10:1))
+  2. Entering `member`/2:
+(member
+ (house englishman ?anon-11:1 ?anon-12:1 ?anon-13:1 red)
+ ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+  ?anon-4:1
+  (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+  ?anon-9:1
+  ?anon-10:1))
+```
+
 ## Built-in predicates
 
 We support the following built-in predicates.  We borrow some notation

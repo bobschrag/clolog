@@ -1,5 +1,5 @@
 (ns clolog.core
-  (:require [clojure.pprint :refer [pprint cl-format]]
+  (:require [clojure.pprint :as pprint :refer [pprint cl-format]]
             [clojure.string :as str]
             [clojure.set :as set]
             [clojure.walk :refer [postwalk]]
@@ -69,7 +69,8 @@
 
 ;;; Find out some things to store assertions appropriately.
 (defn- complex? [head]
-  (or (seq? head) (vector? head)))
+  ;; (or (seq? head) (vector? head))
+  (sequential? head))
 
 (declare ground?)
 
@@ -629,6 +630,9 @@
 
 (defmethod print-dup I?var [x ^java.io.Writer writer]
   (print-dup (format-i?var x) writer))
+
+(defmethod clojure.pprint/simple-dispatch I?var [x]
+  (print (format-i?var x)))
 
 (defn- i?var? [expr]
   (= (type expr) clolog.core.I?var))
@@ -1233,12 +1237,42 @@
     (let [pad (leash-pad special-form-depth index)]
       (println pad "Applied ->? transform"))))
 
+(def ^:dynamic *pprint-leash-statements*
+  "When truthy, `\"Entering\"`, `\"Succeeded\"`, and `\"Failed\"` leash
+  reports pprint (vs. print) statement content, starting on a new
+  line."
+  false)
+
+(defn- pprinted-indented [expr indentation]
+  ;; Edit indentation into pprinted statement.  Adpated from...
+  ;; `https://ask.clojure.org/index.php/11796/there-pprint-start-initial-indentation-whole-output-indented`.
+  (let [indent-str (apply str (repeat indentation \space))
+        ;; Temporarily add opening newline.
+        pprinted-expr (cl-format nil "~%~a" (with-out-str (pprint expr)))
+        new-margin (- pprint/*print-right-margin* indentation)
+        pprinted-expr (binding [pprint/*print-right-margin* new-margin]
+                        (apply str (map #(if (= \newline %) (str \newline indent-str) %)
+                                        pprinted-expr)))
+        ;; Lose opening and trailing newlines.
+        pprinted-expr (subs pprinted-expr 1)
+        pprinted-expr (subs pprinted-expr 0 (- (count pprinted-expr)
+                                               indentation))]
+    pprinted-expr))  
+
+(defn- print-leash-report [prefix message signature statement]
+  (if *pprint-leash-statements*
+    (let [pprinted-statement (pprinted-indented statement (inc (count prefix)))]
+      (println prefix message signature)
+      (println pprinted-statement))
+    (println prefix message signature
+             (cl-format nil "~s" statement))))
+
 (defn- leash-assertion-success [special-form-depth index head bindings]
   (when (and head *leash*) ; Top-level query has no head.
     (let [prefix (leash-prefix special-form-depth index)
+          head (de-reference bindings head)
           signature (goal-signature head)]
-      (println prefix "Succeeded" signature
-               (cl-format nil "~s" (de-reference bindings head))))))
+      (print-leash-report prefix "Succeeded" signature head))))
 
 ;;; Disabled (not maintained).
 (defn- leash-assertion-body [special-form-depth assn-index head body goal bindings]
@@ -1275,24 +1309,21 @@
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Backtracking into" signature
-               (cl-format nil "~s" goal)))))
+      (print-leash-report prefix "Backtracking into" signature goal))))
 
 (defn- leash-failure [special-form-depth index goal bindings]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Failed" signature
-               (cl-format nil "~s" goal)))))
+      (print-leash-report prefix "Failed" signature goal))))
 
 (defn- leash-goal [special-form-depth index goal bindings]
   (when (and goal *leash*)
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Entering" signature
-               (cl-format nil "~s" goal)))))
+      (print-leash-report prefix "Entering" signature goal))))
 
 (defn- standard-split
   "Split `s` at whitespace chars, returning a vec of (unnormalized)
@@ -1399,13 +1430,18 @@
 (defn- operator-leash-prefix [special-form-depth index special-form-stack]
   (let [logic-path (reverse (map first special-form-stack))
         pad (leash-pad special-form-depth index)]
-    (str pad (cl-format nil "~s:" logic-path))))
+    (str pad (cl-format nil "~d. ~s:" index logic-path))))
 
 (defn- leash-special [special-form-depth index verb special-form-stack bindings]
   (when *leash*
     (let [prefix (operator-leash-prefix special-form-depth index special-form-stack)
           logic-form (de-reference bindings (first special-form-stack))]
-      (println prefix verb (cl-format nil "~s" logic-form)))))
+      (if *pprint-leash-statements*
+        (let [indentation (inc (count prefix))
+              pprinted-logic-form (pprinted-indented logic-form indentation)]
+          (println prefix (cl-format nil "~a..." verb))
+          (println pprinted-logic-form))
+        (println prefix verb (cl-format nil "~s" logic-form))))))
 
 ;;; We don't need `leash-special "Backtracking into"` for `and`.  We'll
 ;;; backtrack on the conjuncts, individually (when these have `or` or
@@ -2090,16 +2126,17 @@
         (when-not (backtracking-leash-report? (:leash-report stack-frame)
                                               assn-index)
           (leash-goal special-form-depth assn-index goal bindings)
-          (leash-assertion-head special-form-depth assn-index head goal bindings))
+          (comment ; Disabling...
+            (leash-assertion-head special-form-depth assn-index head goal bindings)
+            ))
         ;; Compare to `succeed-simple-special-form`:
         (let [goals (rest assertion)
               goal (first goals)
               capo (first goal) ; Diagnostic.
               capos () ; Diagnostic.
               goals (rest goals)
-              goal-index assn-index
-              assn-index (inc assn-index)
-              body-index assn-index ; Gathered into body remainder.
+              goal-index assn-index ; Gathered into stack frame.
+              body-index goal-index ; Gathered into body remainder.
               assertion-matches (goal-assertion-matches
                                  assn-index goal bindings)
               leash-report (with-out-str

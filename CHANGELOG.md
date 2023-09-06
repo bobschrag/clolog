@@ -26,6 +26,11 @@
 	  *Seqs match only seqs, vecs only vecs.*
 	  ...inconsistent with this property: *Constants match equal (Clojure `=`) constants.*
 	
+	- Repair body goal indexing.
+
+	- Added `*pprint-leash-statements*` to help make more verbose
+	statements more easily read by humans.
+
 	## [0.3.0]: 2023-08-14
 
 	- Important bug fixes (mediated by improved index integrity checking)

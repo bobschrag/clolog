@@ -671,9 +671,11 @@
 ;;; (defn- make-I?var [index ?var]
 ;;;   (->I?var index ?var))
 
+(def ^:private none 'clolog.core/none)
+
 (defn- ?var-binding [bindings index ?var]
   (let [env (get bindings index)]
-    (get env ?var 'none)))
+    (get env ?var none)))
 
 ;;; De-reference a ?var or a term (or a statement, ...).
 (defn- de-reference
@@ -691,13 +693,13 @@
    (let [is-?var? (if unindexed? ?var? i?var?)
          var-binding (fn [the-var]
                        (if unindexed?
-                         (get bindings the-var 'none)
+                         (get bindings the-var none)
                          (let [[index ?var] (vals the-var)]
                            (?var-binding bindings index ?var))))
          val (if (is-?var? term)
                (var-binding term)
                term)]
-     (cond (= val 'none)
+     (cond (= val none)
            term
 
            (is-?var? val)
@@ -709,7 +711,7 @@
                ;; that's the value you want.  If no value, you just
                ;; want the i?var.
                (let [val-val (var-binding val)]
-                 (if (= val-val 'none)
+                 (if (= val-val none)
                    val
                    val-val))
                (de-reference bindings val unindexed?)))
@@ -721,7 +723,7 @@
                               (let [twoth (second val)]
                                 (if (is-?var? twoth)
                                   (let [twoth-binding (var-binding twoth)]
-                                    (if (= twoth-binding 'none)
+                                    (if (= twoth-binding none)
                                       `(~'& ~twoth)
                                       (if-not (is-?var? twoth-binding)
                                         ;; Get the value.
@@ -844,7 +846,7 @@
 (defn- get-i?var-value [bindings i?var]
   (let [[index ?var] (vals i?var)
         env (get bindings index {})
-        binding (get env ?var 'none)]
+        binding (get env ?var none)]
     binding))
 
 (defn- assoc-i?var-binding
@@ -853,8 +855,8 @@
   ([bindings i?var val overwrite?]
    (let [[index ?var] (vals i?var)
          env (or (get bindings index) {})
-         env (let [existing (get env ?var 'none)]
-               (if (or (= existing 'none) ; Respect (don't overwrite) user `nil`.
+         env (let [existing (get env ?var none)]
+               (if (or (= existing none) ; Respect (don't overwrite) user `nil`.
                        (i?var? existing)
                        overwrite?)
                  (assoc env ?var val)
@@ -934,7 +936,7 @@
       (assoc-i?var-binding bindings assn-form goal-form)
       ;; `(i?var? goal-form)`
       (let [goal-value (get-i?var-value bindings goal-form)]
-        (if (= goal-value 'none)
+        (if (= goal-value none)
           ;; Write the goal i?var to the assn i?var.
           ;; (Leave the goal i?var blank.  We know nothing concrete,
           ;; yet.)
@@ -952,9 +954,9 @@
     ;; `(not (i?var? assn-form))`
     ;; We must have `(i?var? goal-form)`, to have been called.
     (let [goal-value (get-i?var-value bindings goal-form)]
-      (if (= goal-value 'none)
+      (if (= goal-value none)
         (assoc-i?var-binding bindings goal-form assn-form)
-        ;; `(not= goal-value 'none)`
+        ;; `(not= goal-value none)`
         ;; We must have `(i?var? goal-value)`.
         ;; Write assn-form to (lesser-indexed) goal i?var.
         (assoc-i?var-binding bindings goal-value assn-form)))))
@@ -1014,7 +1016,8 @@
      (cond
        ;; Discard any ?vars anonymous in input patterns (e.g., in
        ;; `get-matching-head-assertions`).
-       (or (is-anonymous-?var? a) (is-anonymous-?var? b))
+       (and (not indexed?)
+            (or (is-anonymous-?var? a) (is-anonymous-?var? b)))
        bindings
 
        ;; Bind any ?vars.
@@ -1227,10 +1230,17 @@
         prefix (str pad index \.)]
     prefix))
 
-(defn- goal-signature [goal]
-  (if-not (?var? goal)
-    (cl-format nil "`~s`/~d:" (first goal) (dec (count goal)))
-    (cl-format nil "`~s`:" goal)))
+(defn- goal-signature
+  ([goal]
+   (if-not (?var? goal)
+     (cl-format nil "`~s`/~d:" (first goal) (dec (count goal)))
+     (cl-format nil "`~s`:" goal)))
+  ([goal remaining-assertion-count]
+   (if-not (?var? goal)
+     (cl-format nil "`~s`/~d (~d matching assertions remain):"
+                (first goal) (dec (count goal)) remaining-assertion-count)
+     (cl-format nil "`~s` (~d matching assertions remain):"
+                goal remaining-assertion-count))))
 
 (defn- leash-->?-transform [special-form-depth index]
   (when *leash*
@@ -1304,11 +1314,12 @@
                (cl-format nil "~s:" head)
                (cl-format nil "~s" (de-reference bindings head))))))
 
-(defn- leash-assertion-backtracking [special-form-depth index goal bindings]
+(defn- leash-assertion-backtracking [special-form-depth index goal bindings
+                                     remaining-assertion-count]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
-          signature (goal-signature goal)]
+          signature (goal-signature goal remaining-assertion-count)]
       (print-leash-report prefix "Backtracking into" signature goal))))
 
 (defn- leash-failure [special-form-depth index goal bindings]
@@ -2103,19 +2114,20 @@
     (pprint ["process-predicate-frame:" stack-frame]))
   (with-stack-frame stack-frame
     (if-not (seq assertion-matches)
-      (do
-        (when-not (backtracking-leash-report? (:leash-report stack-frame)
-                                              assn-index)
-          (leash-goal special-form-depth assn-index goal bindings))
-        (leash-failure special-form-depth assn-index goal bindings)
-        ;; Backtrack.
-        #(process-stack-frame continuation))
+      (do (when-not (backtracking-leash-report? (:leash-report stack-frame)
+                                                assn-index)
+            (leash-goal special-form-depth assn-index goal bindings))
+          (leash-failure special-form-depth assn-index goal bindings)
+          ;; Backtrack.
+          #(process-stack-frame continuation))
       (let [[assertion match-bindings] (first assertion-matches)
             assertion-matches (rest assertion-matches)
+            remaining-assertion-count (count assertion-matches)
             ;; For failure continuation:
             leash-report (with-out-str
                            (leash-assertion-backtracking
-                            special-form-depth assn-index goal bindings))
+                            special-form-depth assn-index goal bindings
+                            remaining-assertion-count))
             ;; Use the above backtracking leash report.
             continuation (gather-stack-frame)
             bindings match-bindings
@@ -2126,9 +2138,8 @@
         (when-not (backtracking-leash-report? (:leash-report stack-frame)
                                               assn-index)
           (leash-goal special-form-depth assn-index goal bindings)
-          (comment ; Disabling...
-            (leash-assertion-head special-form-depth assn-index head goal bindings)
-            ))
+          (when-not *pprint-leash-statements* ; Gets too cluttered.
+            (leash-assertion-head special-form-depth assn-index head goal bindings)))
         ;; Compare to `succeed-simple-special-form`:
         (let [goals (rest assertion)
               goal (first goals)
@@ -2137,8 +2148,7 @@
               goals (rest goals)
               goal-index assn-index ; Gathered into stack frame.
               body-index goal-index ; Gathered into body remainder.
-              assertion-matches (goal-assertion-matches
-                                 assn-index goal bindings)
+              assertion-matches (goal-assertion-matches assn-index goal bindings)
               leash-report (with-out-str
                              ;; (leash-assertion-head assn-index head goals goal bindings)
                              (leash-assertion-body

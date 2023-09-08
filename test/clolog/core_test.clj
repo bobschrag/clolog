@@ -814,16 +814,19 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
-    ;; Zebra example, adapted from https://github.com/p-swift/projure README:
+    ;; Zebra puzzle, adapted from https://github.com/p-swift/projure README:
     (do (initialize-prolog)
         (<-- (member ?item (?item & ?rest)))
+        (<- (member ?item (?x ?item)))
         (<- (member ?item (?x & ?rest))
             (different ?rest ())
             (member ?item ?rest))
         (<-- (nextto ?x ?y ?list) (iright ?x ?y ?list))
         (<-  (nextto ?x ?y ?list) (iright ?y ?x ?list))
         (<-- (iright ?left ?right (?left ?right & ?rest)))
-        (<-  (iright ?left ?right (? ?left ?right & ?rest)))
+        (<-  (iright ?left ?right (? & ?rest))
+             (different ?rest (?))
+             (iright ?left ?right ?rest))
         (<-- (zebra ?houses ?w ?z)
              (same ?houses ((house norwegian ? ? ? ?) ; 1,10
                             ?
@@ -870,9 +873,87 @@
            (? [?l ?r] (iright ?l ?r (1 2 3)))))
     (is (= [[1 2] [2 3] [2 1] [3 2]]
            (? [?a ?b] (nextto ?a ?b (1 2 3)))))
-    (is (= :foo
-           (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1)))
+    (is (= '[((house norwegian ?anon-0 ?anon-1 ?anon-2 ?anon-3)
+              (house englishman ?anon-11 ?anon-12 ?anon-13 red)
+              (house spaniard dog ?anon-7 milk ivory)
+              (house ?anon-17 ?anon-18 ?anon-19 coffee green)
+              (house ukrainian ?anon-20 ?anon-21 tea ?anon-22))]
+           (binding [*pprint-leash-statements* true] ; Show this off, briefly.
+             (? ((house norwegian ?anon-0 ?anon-1 ?anon-2 ?anon-3)
+                 (house englishman ?anon-11 ?anon-12 ?anon-13 red)
+                 (house spaniard dog ?anon-7 milk ?anon-8)
+                 (house ?anon-17 ?anon-18 ?anon-19 coffee green)
+                 (house ukrainian ?anon-20 ?anon-21 tea ?anon-22))
+                (iright
+                 (house ?anon-23 ?anon-24 ?anon-25 ?anon-26 ivory)
+                 (house ?anon-27 ?anon-28 ?anon-29 ?anon-30 green)
+                 ((house norwegian ?anon-0 ?anon-1 ?anon-2 ?anon-3)
+                  (house englishman ?anon-11 ?anon-12 ?anon-13 red)
+                  (house spaniard dog ?anon-7 milk ?anon-8)
+                  (house ?anon-17 ?anon-18 ?anon-19 coffee green)
+                  (house ukrainian ?anon-20 ?anon-21 tea ?anon-22)))))))
+    (is (= '[(? red ivory green)]
+           (? (? red ivory green) (iright ivory green (? red ? green)))))
+    (comment ; Long run time (especially when leashed).  See separate test.
+      (is (= '[[((house norwegian fox kools water yellow)
+                 (house ukrainian horse chesterfield tea blue)
+                 (house englishman snails winston milk red)
+                 (house spaniard dog luckystrike oj ivory)
+                 (house japanese zebra parliaments coffee green))
+                norwegian
+                japanese]]
+             (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))))
     ))
+
+(comment ; Long run time.
+  (deftest test-zebra-puzzle-only
+    (testing "zebra"
+      ;; Zebra puzzle, adapted from https://github.com/p-swift/projure README:
+      (do (initialize-prolog)
+          (<-- (member ?item (?item & ?rest)))
+          (<- (member ?item (?x ?item)))
+          (<- (member ?item (?x & ?rest))
+              (different ?rest ())
+              (member ?item ?rest))
+          (<-- (nextto ?x ?y ?list) (iright ?x ?y ?list))
+          (<-  (nextto ?x ?y ?list) (iright ?y ?x ?list))
+          (<-- (iright ?left ?right (?left ?right & ?rest)))
+          (<-  (iright ?left ?right (? & ?rest))
+               (different ?rest (?))
+               (iright ?left ?right ?rest))
+          (<-- (zebra ?houses ?w ?z)
+               (same ?houses ((house norwegian ? ? ? ?) ; 1,10
+                              ?
+                              (house ? ? ? milk ?) ; 9
+                              ?
+                              ?))
+               (member (house englishman ? ? ? red) ?houses)       ; 2
+               (member (house spaniard dog ? ? ?) ?houses)         ; 3
+               (member (house ? ? ? coffee green) ?houses)         ; 4
+               (member (house ukrainian ? ? tea ?) ?houses)        ; 5
+               (iright (house ? ? ? ? ivory)                  ; 6
+                       (house ? ? ? ? green) ?houses)
+               (member (house ? snails winston ? ?) ?houses)       ; 7
+               (member (house ? ? kools ? yellow) ?houses)         ; 8
+               (nextto (house ? ? chesterfield ? ?)           ; 11
+                       (house ? fox ? ? ?) ?houses)
+               (nextto (house ? ? kools ? ?)                  ; 12
+                       (house ? horse ? ? ?) ?houses)
+               (member (house ? ? luckystrike oj ?) ?houses)       ; 13
+               (member (house japanese ? parliaments ? ?) ?houses) ; 14
+               (nextto (house norwegian ? ? ? ?)              ; 15
+                       (house ? ? ? ? blue) ?houses)
+               (member (house ?w ? ? water ?) ?houses)             ; Q1
+               (member (house ?z zebra ? ? ?) ?houses))            ; Q2
+          )
+      (is (= '[[((house norwegian fox kools water yellow)
+                 (house ukrainian horse chesterfield tea blue)
+                 (house englishman snails winston milk red)
+                 (house spaniard dog luckystrike oj ivory)
+                 (house japanese zebra parliaments coffee green))
+                norwegian
+                japanese]]
+             (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))))))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.
 ;;; Copy any authoritative output to leash-tests.txt.

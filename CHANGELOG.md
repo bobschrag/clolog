@@ -28,7 +28,7 @@
 	
 	- Repair body goal indexing.
 
-	- Added `*pprint-leash-statements*` to help make more verbose
+	- Add `*pprint-leash-statements*` to help make more verbose
 	statements more easily read by humans.
 
 	## [0.3.0]: 2023-08-14

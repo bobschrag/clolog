@@ -60,7 +60,7 @@ goodies.
   expressions**
 
   ```clojure
-  > (do (<- (male laban))
+  > (do (<-- (male laban))
         (? ?y (male ?x) (evals-from? ?y (list '?x))))
   [(laban)]
   ```  
@@ -86,16 +86,20 @@ goodies.
    (same): Entering (same 1 1)
    (same): Succeeded (same 1 1)
   Recorded answer: true
-  Answer limit reached.
+  Answer limit reached. ; Because answer template `true` has no ?vars.
   [true]
   ```
   
-- **Built-in term matching predicate: `same`**
+- **Built-in term [non-]matching predicates: `same`, `different`**
 
   ```clojure
   > (? (?a ?b)
        (same [?a 2] [1 ?b]))
   [(1 2)]
+
+  > (? (?a ?b)
+       (different [?a 2] [1 ?b]))
+  []
   ```
 
 - **Built-in term inspection predicates: `var`, `ground`**
@@ -114,7 +118,7 @@ goodies.
 
   ```clojure
   > (? true (true))
-  true
+  [true]
   ```
 
   ```clojure
@@ -380,7 +384,7 @@ In production rules below, ...
 
 \<special-predicate\> :- \<built-in-predicate\> | \<transform-predicate\>
 
-\<built-in-predicate\> :- \<operator\> | \<Clojure-calling-predicate\> | `same` | `var` | `ground` | `true` | `false`
+\<built-in-predicate\> :- \<operator\> | \<Clojure-calling-predicate\> | `same` | `different` | `var` | `ground` | `true` | `false`
 
 \<operator\> :- `and` | `or` | `if` | `not` | `first`
 
@@ -464,10 +468,10 @@ matching for non-anonymous ?vars.  In matching (AKA "unification"),
 
 - Constants match equal (Clojure `=`) constants.
 
-- Complex terms match recursively.  Seqs match only seqs, vecs only vecs.
+- Complex terms match recursively.
 
 - A **tail ?var** (last in a statement or complex term, and preceded by
-  `&`) matches the (possibly empty) seq or list of terms remaining in
+  `&`) matches the (possibly empty) seq or vector of terms remaining in
   the parallel traversal of its opposing complex term.
 
 One term **subsumes** another if the two terms match and---considering
@@ -689,6 +693,52 @@ Leashing also...
 - Indexes reports per depth of assertion nesting
 - Indicates the nesting of built-in predicates for the current assertion
 - Left-pads reports per nesting of assertion and built-in predicate goals.
+
+When `*pprint-leash-statements*` is truthy, ...`"Entering"`, ...
+
+- `"Matched head"` leash reports are omitted.
+- `"Succeeded"`, and `"Failed"` leash reports pprint (vs. print)
+  statement content, starting on a new line, with indentation, as in...
+
+```clojure
+clolog.core> (binding [*leash* true
+                       *pprint-leash-statements* true]
+               (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))
+0. Processing query: ((zebra ?h ?w ?z))
+ 1. Entering `zebra`/3:
+    (zebra ?h:0 ?w:0 ?z:0)
+
+  1. (same): Entering...
+             (same
+              ?h:0
+              ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+               ?anon-4:1
+               (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+               ?anon-9:1
+               ?anon-10:1))
+
+  1. (same): Succeeded...
+             (same
+              ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+               ?anon-4:1
+               (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+               ?anon-9:1
+               ?anon-10:1)
+              ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+               ?anon-4:1
+               (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+               ?anon-9:1
+               ?anon-10:1))
+
+  2. Entering `member`/2:
+     (member
+      (house englishman ?anon-11:1 ?anon-12:1 ?anon-13:1 red)
+      ((house norwegian ?anon-0:1 ?anon-1:1 ?anon-2:1 ?anon-3:1)
+       ?anon-4:1
+       (house ?anon-5:1 ?anon-6:1 ?anon-7:1 milk ?anon-8:1)
+       ?anon-9:1
+       ?anon-10:1))
+```
 
 ## Built-in predicates
 

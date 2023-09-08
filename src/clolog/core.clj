@@ -1,5 +1,5 @@
 (ns clolog.core
-  (:require [clojure.pprint :refer [pprint cl-format]]
+  (:require [clojure.pprint :as pprint :refer [pprint cl-format]]
             [clojure.string :as str]
             [clojure.set :as set]
             [clojure.walk :refer [postwalk]]
@@ -69,7 +69,8 @@
 
 ;;; Find out some things to store assertions appropriately.
 (defn- complex? [head]
-  (or (seq? head) (vector? head)))
+  ;; (or (seq? head) (vector? head))
+  (sequential? head))
 
 (declare ground?)
 
@@ -92,12 +93,30 @@
        'non-ground-complex
        (first head)))))
 
+;;; "Anonymous" ?vars must be distinguishable, to support
+;;; de-referencing.  (See the Zebra test.)
+(def ^:private ^:dynamic *anon-?var-counter* (atom 0))
+
+(defn- new-anon-?var [root-?var]
+  (let [counter @*anon-?var-counter*
+        root-string (subs (name root-?var) 1)]
+    (swap! *anon-?var-counter* inc)
+    (read-string (cl-format nil "?anon~a-~d" root-string counter))))
+
+(declare walk-walkable)
+(declare anonymous-?var?)
+
+(defn- distinguish-anons [thing] ; Query goals or assertion.
+  (binding [*anon-?var-counter* (atom 0)]
+    (walk-walkable anonymous-?var? #(new-anon-?var %) thing)))
+
 (defn assert<- [assertion]
   "Add `assertion` to the knowledge base.  If the assertion's head
-  statement has a constant predicate and fixed arity, place `assertion's`
+  statement has a constant predicate and fixed arity, place `assertion`
   last for consideration in search."
   (check-assertion assertion)
-  (let [head (first assertion)
+  (let [assertion (distinguish-anons assertion)
+        head (first assertion)
         predicate (get-predicate head :unindexed)
         arity (if (some #{'&} head)
                 'variadic
@@ -122,7 +141,8 @@
   required-constant head statement predicate at its required-fixed
   arity."
   (check-assertion assertion)
-  (let [head (first assertion)
+  (let [assertion (distinguish-anons assertion)
+        head (first assertion)
         predicate (get-predicate head :unindexed)
         arity (if (some #{'&} head)
                 'variadic
@@ -179,7 +199,8 @@
   required-constant head statement predicate at its required-fixed
   arity."
   (check-assertion assertion)
-  (let [head (first assertion)
+  (let [assertion (distinguish-anons assertion)
+        head (first assertion)
         predicate (get-predicate head :unindexed)
         arity (if (some #{'&} head)
                 'variadic
@@ -239,8 +260,6 @@
      ;; Consider `when`, `when-not`, `when%`, `when%-not`.
      ;; `optional` (as in SPARQL)
      (create-predicate-transform '((optional ?goal) (if ?goal (true) (true))))
-     ;; `different`
-     (create-predicate-transform '((different ?a ?b) (not (same ?a ?b))))
      ;; `is`
      (create-predicate-transform '((is ?a ?b) (same ?a ?b)))
      ;; Norvig `lisp`, `lispp`
@@ -284,7 +303,7 @@
                                                 var ground
                                                 and or not if
                                                 first
-                                                same
+                                                same different
                                                 true false})
 
 (defn- public-built-in-special-head? [head]
@@ -612,6 +631,9 @@
 (defmethod print-dup I?var [x ^java.io.Writer writer]
   (print-dup (format-i?var x) writer))
 
+(defmethod clojure.pprint/simple-dispatch I?var [x]
+  (print (format-i?var x)))
+
 (defn- i?var? [expr]
   (= (type expr) clolog.core.I?var))
 
@@ -649,9 +671,11 @@
 ;;; (defn- make-I?var [index ?var]
 ;;;   (->I?var index ?var))
 
+(def ^:private none 'clolog.core/none)
+
 (defn- ?var-binding [bindings index ?var]
   (let [env (get bindings index)]
-    (get env ?var 'none)))
+    (get env ?var none)))
 
 ;;; De-reference a ?var or a term (or a statement, ...).
 (defn- de-reference
@@ -669,21 +693,28 @@
    (let [is-?var? (if unindexed? ?var? i?var?)
          var-binding (fn [the-var]
                        (if unindexed?
-                         (get bindings the-var 'none)
+                         (get bindings the-var none)
                          (let [[index ?var] (vals the-var)]
                            (?var-binding bindings index ?var))))
          val (if (is-?var? term)
                (var-binding term)
                term)]
-     (cond (= val 'none)
+     (cond (= val none)
            term
 
            (is-?var? val)
-           (if de-referencing-i?var?
-             ;; In our "push-up" design, if you de-reference an i?var
-             ;; to another i?var, the latter is the value you want.
-             val
-             (de-reference bindings val unindexed?))
+           (do
+             ;; #dbg
+             (if de-referencing-i?var?
+               ;; In our "push-up" design, if you de-reference an
+               ;; i?var to another i?var and the latter has a value,
+               ;; that's the value you want.  If no value, you just
+               ;; want the i?var.
+               (let [val-val (var-binding val)]
+                 (if (= val-val none)
+                   val
+                   val-val))
+               (de-reference bindings val unindexed?)))
 
            (and (or (seq? val) (vector? val))
                 (not (empty? val)))
@@ -692,7 +723,7 @@
                               (let [twoth (second val)]
                                 (if (is-?var? twoth)
                                   (let [twoth-binding (var-binding twoth)]
-                                    (if (= twoth-binding 'none)
+                                    (if (= twoth-binding none)
                                       `(~'& ~twoth)
                                       (if-not (is-?var? twoth-binding)
                                         ;; Get the value.
@@ -778,17 +809,17 @@
      (ground? expr))))
 
 ;;; When exiting a successful assertion (see Search section), we need
-;;; to process any exported ?vars (as defined in `./architecture.md`).
+;;; to process any exported ?vars (as defined in `architecture.md`).
 
 ;;; FUTURE: Support multiple parallel threads.
-(def ^:private ^:dynamic *unbound-var-counter* (atom 0))
+(def ^:private ^:dynamic *unbound-?var-counter* (atom 0))
 
 (defn- new-unbound-?var
   ([]
    (new-unbound-?var '?unbound))
   ([root-symbol]
-   (let [counter @*unbound-var-counter*]
-     (swap! *unbound-var-counter* inc)
+   (let [counter @*unbound-?var-counter*]
+     (swap! *unbound-?var-counter* inc)
      (read-string (cl-format nil "~a-~d" root-symbol counter)))))
 
 (defn- register-unbound-?var [?var-renamings index term-?var]
@@ -815,7 +846,7 @@
 (defn- get-i?var-value [bindings i?var]
   (let [[index ?var] (vals i?var)
         env (get bindings index {})
-        binding (get env ?var 'none)]
+        binding (get env ?var none)]
     binding))
 
 (defn- assoc-i?var-binding
@@ -824,8 +855,8 @@
   ([bindings i?var val overwrite?]
    (let [[index ?var] (vals i?var)
          env (or (get bindings index) {})
-         env (let [existing (get env ?var 'none)]
-               (if (or (= existing 'none) ; Respect (don't overwrite) user `nil`.
+         env (let [existing (get env ?var none)]
+               (if (or (= existing none) ; Respect (don't overwrite) user `nil`.
                        (i?var? existing)
                        overwrite?)
                  (assoc env ?var val)
@@ -905,7 +936,7 @@
       (assoc-i?var-binding bindings assn-form goal-form)
       ;; `(i?var? goal-form)`
       (let [goal-value (get-i?var-value bindings goal-form)]
-        (if (= goal-value 'none)
+        (if (= goal-value none)
           ;; Write the goal i?var to the assn i?var.
           ;; (Leave the goal i?var blank.  We know nothing concrete,
           ;; yet.)
@@ -923,9 +954,9 @@
     ;; `(not (i?var? assn-form))`
     ;; We must have `(i?var? goal-form)`, to have been called.
     (let [goal-value (get-i?var-value bindings goal-form)]
-      (if (= goal-value 'none)
+      (if (= goal-value none)
         (assoc-i?var-binding bindings goal-form assn-form)
-        ;; `(not= goal-value 'none)`
+        ;; `(not= goal-value none)`
         ;; We must have `(i?var? goal-value)`.
         ;; Write assn-form to (lesser-indexed) goal i?var.
         (assoc-i?var-binding bindings goal-value assn-form)))))
@@ -946,21 +977,27 @@
     (vec (rest seq-or-vec))
     (rest seq-or-vec)))
 
-;;; Integrity check (for now):
-(def check-indices? true)
+(comment
+;;; Integrity check:
+  (def check-indices? false)
+  )
 
+;;; This has been helpful for simpler debugging, but it doesn't work
+;;; with the Zebra test (or generally).
+(comment
 ;;; We always have a:goal b:assertion-head (both indexified), so we
 ;;; should have the asserted condition.
-(defn- check-unify-indices [a b]
-  (let [a-i?vars (i?vars-of a)
-        a-max-index (when (seq a-i?vars)
-                      (apply max (map :index a-i?vars)))
-        b-i?vars (when a-max-index (i?vars-of b))
-        ;; We expect these indices all to be the same (`assn-index`).
-        b-min-index (when (seq b-i?vars)
-                      (apply min (map :index b-i?vars)))]
-    (when b-min-index
-      (assert (<= a-max-index b-min-index)))))
+  (defn- check-unify-indices [a b]
+    (let [a-i?vars (i?vars-of a)
+          a-max-index (when (seq a-i?vars)
+                        (apply max (map :index a-i?vars)))
+          b-i?vars (when a-max-index (i?vars-of b))
+          ;; We expect these indices all to be the same (`assn-index`).
+          b-min-index (when (seq b-i?vars)
+                        (apply min (map :index b-i?vars)))]
+      (when b-min-index
+        (assert (<= a-max-index b-min-index)))))
+  )
 
 (defn- unify
   ([a b] ; Terms (or statements, assertions, ...).
@@ -971,50 +1008,55 @@
    (let [is-?var? (if indexed? i?var? ?var?)
          is-anonymous-?var? (if indexed? anonymous-i?var? anonymous-?var?)
          updated (if indexed? i?var-updated-bindings updated-bindings)]
-     ;; TODO: Remove, upon QA.  (Needed for `(same ?x ?x)` etc.)
-     (when (and indexed? check-indices?)
-       (check-unify-indices a b))
+     (comment
+       ;; Remove, upon QA.  (Needed for `(same ?x ?x)` etc.)
+       (when (and indexed? check-indices?)
+         (check-unify-indices a b)))
      ;; (do (pprint "unify:") (pprint bindings) (pprint a) (pprint b))
-     (if (or (and (= a []) (= b []))
-             (and (= a ()) (= b ())))
+     (cond
+       ;; Discard any ?vars anonymous in input patterns (e.g., in
+       ;; `get-matching-head-assertions`).
+       (and (not indexed?)
+            (or (is-anonymous-?var? a) (is-anonymous-?var? b)))
        bindings
-       ;; Recursion bottoms out (or we started empty).  We don't unify
-       ;; seqs with vecs.  Return bindings.
-       (cond
-         ;; Discard any anonymous ?vars.
-         (or (is-anonymous-?var? a) (is-anonymous-?var? b))
-         bindings
 
-         ;; Bind any ?vars.
-         (or (is-?var? a) (is-?var? b))
-         (updated bindings a b)
+       ;; Bind any ?vars.
+       (or (is-?var? a) (is-?var? b))
+       (updated bindings a b)
 
-         ;; Look inside vectors and sequences.
-         (or (and (vector? a) (vector? b))
-             (and (seq? a) (seq? b)))
-         (let [[a-head a-tail] [(first a) (like-rest a)]
-               [b-head b-tail] [(first b) (like-rest b)]]
-           (cond (and (= a-head '&) (= b-head '&))
-                 (unify a-tail b-tail bindings indexed?)
+       ;; Look inside vectors and sequences.  Clojure considers
+       ;; like-content seqs and vectors to be =, so we unify them.
+       (and (sequential? a) (sequential? b)) ; Lists and vectors are sequential.
+       (let [[a-head a-tail] [(first a) (like-rest a)]
+             [b-head b-tail] [(first b) (like-rest b)]]
+         (cond
+           (and (= a []) (= b [])) ; Equivalently (e.g.): `(and (= a ()) (= b []))`.
+           bindings
 
-                 (= a-head '&)
-                 (unify (first a-tail) ; `(& ?rest)` ==> `?rest`
-                        b bindings indexed?)
+           (and (= a-head '&) (= b-head '&))
+           (unify a-tail b-tail bindings indexed?)
 
-                 (= b-head '&)
-                 (unify a (first b-tail) bindings indexed?)
+           (= a-head '&)
+           (unify (first a-tail) ; `(& ?rest)` ==> `?rest`
+                  b bindings indexed?)
 
-                 :else
-                 (let [bindings (unify a-head b-head bindings indexed?)]
-                   (when bindings
-                     (unify (de-reference bindings a-tail (not indexed?))
-                            (de-reference bindings b-tail (not indexed?))
-                            bindings indexed?)))))
+           (= b-head '&)
+           (unify a (first b-tail) bindings indexed?)
 
-         ;; Treat anything else as atomic.
-         :else
-         (when (= a b)
-           bindings))))))
+           (or (= a []) (= b []))
+           nil
+
+           :else
+           (let [bindings (unify a-head b-head bindings indexed?)]
+             (when bindings
+               (unify (de-reference bindings a-tail (not indexed?))
+                      (de-reference bindings b-tail (not indexed?))
+                      bindings indexed?)))))
+
+       ;; Treat anything else as atomic.
+       :else
+       (when (= a b)
+         bindings)))))
 
 (defn- i?var-unify [a b bindings]
   (unify a b bindings :indexed))
@@ -1188,22 +1230,59 @@
         prefix (str pad index \.)]
     prefix))
 
-(defn- goal-signature [goal]
-  (if-not (?var? goal)
-    (cl-format nil "`~s`/~d:" (first goal) (dec (count goal)))
-    (cl-format nil "`~s`:" goal)))
+(defn- goal-signature
+  ([goal]
+   (if-not (?var? goal)
+     (cl-format nil "`~s`/~d:" (first goal) (dec (count goal)))
+     (cl-format nil "`~s`:" goal)))
+  ([goal remaining-assertion-count]
+   (if-not (?var? goal)
+     (cl-format nil "`~s`/~d (~d matching assertions remain):"
+                (first goal) (dec (count goal)) remaining-assertion-count)
+     (cl-format nil "`~s` (~d matching assertions remain):"
+                goal remaining-assertion-count))))
 
 (defn- leash-->?-transform [special-form-depth index]
   (when *leash*
     (let [pad (leash-pad special-form-depth index)]
       (println pad "Applied ->? transform"))))
 
+(def ^:dynamic *pprint-leash-statements*
+  "When truthy, `\"Entering\"`, `\"Succeeded\"`, and `\"Failed\"` leash
+  reports pprint (vs. print) statement content, starting on a new
+  line."
+  false)
+
+(defn- pprinted-indented [expr indentation]
+  ;; Edit indentation into pprinted statement.  Adpated from...
+  ;; `https://ask.clojure.org/index.php/11796/there-pprint-start-initial-indentation-whole-output-indented`.
+  (let [indent-str (apply str (repeat indentation \space))
+        ;; Temporarily add opening newline.
+        pprinted-expr (cl-format nil "~%~a" (with-out-str (pprint expr)))
+        new-margin (- pprint/*print-right-margin* indentation)
+        pprinted-expr (binding [pprint/*print-right-margin* new-margin]
+                        (apply str (map #(if (= \newline %) (str \newline indent-str) %)
+                                        pprinted-expr)))
+        ;; Lose opening and trailing newlines.
+        pprinted-expr (subs pprinted-expr 1)
+        pprinted-expr (subs pprinted-expr 0 (- (count pprinted-expr)
+                                               indentation))]
+    pprinted-expr))  
+
+(defn- print-leash-report [prefix message signature statement]
+  (if *pprint-leash-statements*
+    (let [pprinted-statement (pprinted-indented statement (inc (count prefix)))]
+      (println prefix message signature)
+      (println pprinted-statement))
+    (println prefix message signature
+             (cl-format nil "~s" statement))))
+
 (defn- leash-assertion-success [special-form-depth index head bindings]
   (when (and head *leash*) ; Top-level query has no head.
     (let [prefix (leash-prefix special-form-depth index)
+          head (de-reference bindings head)
           signature (goal-signature head)]
-      (println prefix "Succeeded" signature
-               (cl-format nil "~s" (de-reference bindings head))))))
+      (print-leash-report prefix "Succeeded" signature head))))
 
 ;;; Disabled (not maintained).
 (defn- leash-assertion-body [special-form-depth assn-index head body goal bindings]
@@ -1235,29 +1314,27 @@
                (cl-format nil "~s:" head)
                (cl-format nil "~s" (de-reference bindings head))))))
 
-(defn- leash-assertion-backtracking [special-form-depth index goal bindings]
+(defn- leash-assertion-backtracking [special-form-depth index goal bindings
+                                     remaining-assertion-count]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
-          signature (goal-signature goal)]
-      (println prefix "Backtracking into" signature
-               (cl-format nil "~s" goal)))))
+          signature (goal-signature goal remaining-assertion-count)]
+      (print-leash-report prefix "Backtracking into" signature goal))))
 
 (defn- leash-failure [special-form-depth index goal bindings]
   (when *leash*
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Failed" signature
-               (cl-format nil "~s" goal)))))
+      (print-leash-report prefix "Failed" signature goal))))
 
 (defn- leash-goal [special-form-depth index goal bindings]
   (when (and goal *leash*)
     (let [prefix (leash-prefix special-form-depth index)
           goal (de-reference bindings goal)
           signature (goal-signature goal)]
-      (println prefix "Entering" signature
-               (cl-format nil "~s" goal)))))
+      (print-leash-report prefix "Entering" signature goal))))
 
 (defn- standard-split
   "Split `s` at whitespace chars, returning a vec of (unnormalized)
@@ -1364,13 +1441,18 @@
 (defn- operator-leash-prefix [special-form-depth index special-form-stack]
   (let [logic-path (reverse (map first special-form-stack))
         pad (leash-pad special-form-depth index)]
-    (str pad (cl-format nil "~s:" logic-path))))
+    (str pad (cl-format nil "~d. ~s:" index logic-path))))
 
 (defn- leash-special [special-form-depth index verb special-form-stack bindings]
   (when *leash*
     (let [prefix (operator-leash-prefix special-form-depth index special-form-stack)
           logic-form (de-reference bindings (first special-form-stack))]
-      (println prefix verb (cl-format nil "~s" logic-form)))))
+      (if *pprint-leash-statements*
+        (let [indentation (inc (count prefix))
+              pprinted-logic-form (pprinted-indented logic-form indentation)]
+          (println prefix (cl-format nil "~a..." verb))
+          (println pprinted-logic-form))
+        (println prefix verb (cl-format nil "~s" logic-form))))))
 
 ;;; We don't need `leash-special "Backtracking into"` for `and`.  We'll
 ;;; backtrack on the conjuncts, individually (when these have `or` or
@@ -1902,6 +1984,24 @@
         (do (leash-special special-form-depth goal-index "Failed" special-form-stack bindings)
             #(process-stack-frame continuation))))))
 
+(defn- process-different-frame [stack-frame]
+  (when debugging-stack?
+    (pprint ["process-different-frame" stack-frame]))
+  (with-stack-frame stack-frame
+    (let [capo 'different
+          a-form (second goal)
+          b-form (nth goal 2) ; (third goal)
+          goal nil ; Gathered.
+          a-form (de-reference bindings a-form)
+          b-form (de-reference bindings b-form)
+          _side-effect (leash-special special-form-depth goal-index "Entering" special-form-stack bindings)
+          bindings? (i?var-unify a-form b-form bindings)]
+      (if (nil? bindings?)
+        (do (leash-special special-form-depth goal-index "Succeeded" special-form-stack bindings)
+            (succeed-simple-special-form))
+        (do (leash-special special-form-depth goal-index "Failed" special-form-stack bindings)
+            #(process-stack-frame continuation))))))
+
 (defn- apply-predicate-transform [transform form leash-args]
   (let [input-pattern (first transform)
         output-pattern (second transform)
@@ -1982,6 +2082,7 @@
         var #(process-var-frame stack-frame)
         ground #(process-ground-frame stack-frame)
         same #(process-same-frame stack-frame)
+        different #(process-different-frame stack-frame)
         true #(process-true-frame stack-frame)
         false #(process-false-frame stack-frame)))))
 
@@ -2013,40 +2114,41 @@
     (pprint ["process-predicate-frame:" stack-frame]))
   (with-stack-frame stack-frame
     (if-not (seq assertion-matches)
-      (do
-        (when-not (backtracking-leash-report? (:leash-report stack-frame)
-                                              assn-index)
-          (leash-goal special-form-depth assn-index goal bindings))
-        (leash-failure special-form-depth assn-index goal bindings)
-        ;; Backtrack.
-        #(process-stack-frame continuation))
+      (do (when-not (backtracking-leash-report? (:leash-report stack-frame)
+                                                assn-index)
+            (leash-goal special-form-depth assn-index goal bindings))
+          (leash-failure special-form-depth assn-index goal bindings)
+          ;; Backtrack.
+          #(process-stack-frame continuation))
       (let [[assertion match-bindings] (first assertion-matches)
             assertion-matches (rest assertion-matches)
+            remaining-assertion-count (count assertion-matches)
             ;; For failure continuation:
             leash-report (with-out-str
                            (leash-assertion-backtracking
-                            special-form-depth assn-index goal bindings))
+                            special-form-depth assn-index goal bindings
+                            remaining-assertion-count))
             ;; Use the above backtracking leash report.
             continuation (gather-stack-frame)
             bindings match-bindings
             head (first assertion)]
-        (when check-indices?
-          (check-assertion-indices goal-index goal assn-index assertion bindings))
+        (comment
+          (when check-indices?
+            (check-assertion-indices goal-index goal assn-index assertion bindings)))
         (when-not (backtracking-leash-report? (:leash-report stack-frame)
                                               assn-index)
           (leash-goal special-form-depth assn-index goal bindings)
-          (leash-assertion-head special-form-depth assn-index head goal bindings))
+          (when-not *pprint-leash-statements* ; Gets too cluttered.
+            (leash-assertion-head special-form-depth assn-index head goal bindings)))
         ;; Compare to `succeed-simple-special-form`:
         (let [goals (rest assertion)
               goal (first goals)
               capo (first goal) ; Diagnostic.
               capos () ; Diagnostic.
               goals (rest goals)
-              goal-index assn-index
-              assn-index (inc assn-index)
-              body-index assn-index ; Gathered into body remainder.
-              assertion-matches (goal-assertion-matches
-                                 assn-index goal bindings)
+              goal-index assn-index ; Gathered into stack frame.
+              body-index goal-index ; Gathered into body remainder.
+              assertion-matches (goal-assertion-matches assn-index goal bindings)
               leash-report (with-out-str
                              ;; (leash-assertion-head assn-index head goals goal bindings)
                              (leash-assertion-body
@@ -2097,7 +2199,7 @@
 (defn- transform-->?s [stack-frame]
   (with-stack-frame stack-frame
     (if-not (or (not (special-goal? goal)) ; * See below.
-                (= (first goal) 'same))
+                ('#{same different} (first goal)))
       goal
       (let [evals-from?-goals (atom [])
             ->?-free-goal ; ...
@@ -2118,8 +2220,8 @@
 ;;; it.  (Not doing this transform on `second` of an `evals-from?`
 ;;; goal.*) Other special forms all have subgoals, to whose terminal
 ;;; forms---user predicates---the transform will be applied directly.
-;;; Among built-in special forms, we subject only `same` to the
-;;; transform.
+;;; Among built-in special forms, we subject only `same` and
+;;; `different` to the transform.
 ;;;
 ;;; * We might take this on by recognizing our auto-generated `->?-<n>`
 ;;; ?var as a signal that such a form alreay had been processed.
@@ -2223,6 +2325,7 @@
           goal-index stack-index
           ;; Automatic: assn-index (inc goal-index)
           input-goals goals
+          goals (distinguish-anons goals)
           goals (indexify goals stack-index)
           query-i?vars (set (i?vars-of goals))
           goal (first goals)
@@ -2245,7 +2348,7 @@
                                       ;; solutions.)
                                       (atom 1)
                                       (when limit (atom limit)))
-                *unbound-var-counter* (atom 0)] ; Ok for NAF.
+                *unbound-?var-counter* (atom 0)] ; Ok for NAF.
         (let [capo 'query
               capos ()
               leash-report (with-out-str

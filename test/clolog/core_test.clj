@@ -334,11 +334,11 @@
            (query '?x '((same ?x ?x)))))
     ;; Multi-goal assertions:
     (do (initialize-prolog)
-        (assert<- '((uncle ?nephew ?uncle) ; <--
-                    (parent ?nephew ?parent)
+        ;; "Nibling": niece or nephew.
+        (assert<- '((uncle ?nibling ?uncle) ; <--
+                    (parent ?nibling ?parent)
                     (sibling ?uncle ?parent)
-                    (male ?uncle)
-                    (male ?nephew)))
+                    (male ?uncle)))
         (assert<- '((sibling ?x ?y) ; <--
                     (brother ?x ?y)))
         (assert<- '((sibling ?x ?y) ; <--
@@ -567,6 +567,8 @@
            (query '[?a ?b] '((same [?a 2] [1 ?b])))))
     (is (= '[(1 2)]
            (query '(?a ?b) '((same [?a 2] [1 ?b])))))
+    (is (= '[]
+           (query '(?a ?b) '((different [?a 2] [1 ?b])))))
     ;;; `not` goal:
     (is (= [true]
            (query true '((not (truthy? false))))))
@@ -774,7 +776,7 @@
            (? ?rest (variadic-term [& ?rest]))))
     (is (= '[[] [2]]
            (? ?rest (variadic-term [1 & ?rest]))))
-    (is (= []
+    (is (= '[[1] [1 2]]
            (? ?rest (variadic-term (& ?rest)))))
     (do (initialize-prolog)
         (<- (variadic))
@@ -812,7 +814,146 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
+    ;; Zebra puzzle, adapted from https://github.com/p-swift/projure README:
+    (do (initialize-prolog)
+        (<-- (member ?item (?item & ?rest)))
+        (<- (member ?item (?x ?item)))
+        (<- (member ?item (?x & ?rest))
+            (different ?rest ())
+            (member ?item ?rest))
+        (<-- (nextto ?x ?y ?list) (iright ?x ?y ?list))
+        (<-  (nextto ?x ?y ?list) (iright ?y ?x ?list))
+        (<-- (iright ?left ?right (?left ?right & ?rest)))
+        (<-  (iright ?left ?right (? & ?rest))
+             (different ?rest (?))
+             (iright ?left ?right ?rest))
+        (<-- (zebra ?houses ?w ?z)
+             (same ?houses ((house norwegian ? ? ? ?) ; 1,10
+                            ?
+                            (house ? ? ? milk ?) ; 9
+                            ?
+                            ?))
+             (member (house englishman ? ? ? red) ?houses)       ; 2
+             (member (house spaniard dog ? ? ?) ?houses)         ; 3
+             (member (house ? ? ? coffee green) ?houses)         ; 4
+             (member (house ukrainian ? ? tea ?) ?houses)        ; 5
+             (iright (house ? ? ? ? ivory)                  ; 6
+                     (house ? ? ? ? green) ?houses)
+             (member (house ? snails winston ? ?) ?houses)       ; 7
+             (member (house ? ? kools ? yellow) ?houses)         ; 8
+             (nextto (house ? ? chesterfield ? ?)           ; 11
+                     (house ? fox ? ? ?) ?houses)
+             (nextto (house ? ? kools ? ?)                  ; 12
+                     (house ? horse ? ? ?) ?houses)
+             (member (house ? ? luckystrike oj ?) ?houses)       ; 13
+             (member (house japanese ? parliaments ? ?) ?houses) ; 14
+             (nextto (house norwegian ? ? ? ?)              ; 15
+                     (house ? ? ? ? blue) ?houses)
+             (member (house ?w ? ? water ?) ?houses)             ; Q1
+             (member (house ?z zebra ? ? ?) ?houses))            ; Q2
+        )
+    (is (= [true]
+           (? true (member 1 (1 2 3)))))
+    (is (= [1 2 3]
+           (? ?x (member ?x (1 2 3)))))
+    (is (= [true]
+           (? true (member 2 ?))))
+    (is (= '[(1)]
+           (? ?numbers (same ?numbers (?first))
+                       (member 1 ?numbers))))
+    (is (= '[(1)]
+           (? ?numbers (same ?numbers (?))
+                       (member 1 ?numbers))))
+    (is (= '[(1 2 3)]
+           (? ?numbers (same ?numbers (1 2 ?))
+                       (member 3 ?numbers))))
+    (is (= [true]
+           (? true (iright 1 2 (1 2 3)))))
+    (is (= '[[1 2] [2 3]]
+           (? [?l ?r] (iright ?l ?r (1 2 3)))))
+    (is (= [[1 2] [2 3] [2 1] [3 2]]
+           (? [?a ?b] (nextto ?a ?b (1 2 3)))))
+    (is (= '[((house norwegian ?anon-0 ?anon-1 ?anon-2 ?anon-3)
+              (house englishman ?anon-11 ?anon-12 ?anon-13 red)
+              (house spaniard dog ?anon-7 milk ivory)
+              (house ?anon-17 ?anon-18 ?anon-19 coffee green)
+              (house ukrainian ?anon-20 ?anon-21 tea ?anon-22))]
+           (binding [*pprint-leash-statements* true] ; Show this off, briefly.
+             (? ((house norwegian ?anon-0 ?anon-1 ?anon-2 ?anon-3)
+                 (house englishman ?anon-11 ?anon-12 ?anon-13 red)
+                 (house spaniard dog ?anon-7 milk ?anon-8)
+                 (house ?anon-17 ?anon-18 ?anon-19 coffee green)
+                 (house ukrainian ?anon-20 ?anon-21 tea ?anon-22))
+                (iright
+                 (house ?anon-23 ?anon-24 ?anon-25 ?anon-26 ivory)
+                 (house ?anon-27 ?anon-28 ?anon-29 ?anon-30 green)
+                 ((house norwegian ?anon-0 ?anon-1 ?anon-2 ?anon-3)
+                  (house englishman ?anon-11 ?anon-12 ?anon-13 red)
+                  (house spaniard dog ?anon-7 milk ?anon-8)
+                  (house ?anon-17 ?anon-18 ?anon-19 coffee green)
+                  (house ukrainian ?anon-20 ?anon-21 tea ?anon-22)))))))
+    (is (= '[(? red ivory green)]
+           (? (? red ivory green) (iright ivory green (? red ? green)))))
+    (comment ; Long run time (especially when leashed).  See separate test.
+      (is (= '[[((house norwegian fox kools water yellow)
+                 (house ukrainian horse chesterfield tea blue)
+                 (house englishman snails winston milk red)
+                 (house spaniard dog luckystrike oj ivory)
+                 (house japanese zebra parliaments coffee green))
+                norwegian
+                japanese]]
+             (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))))
     ))
+
+(comment ; Long run time.
+  (deftest test-zebra-puzzle-only
+    (testing "zebra"
+      ;; Zebra puzzle, adapted from https://github.com/p-swift/projure README:
+      (do (initialize-prolog)
+          (<-- (member ?item (?item & ?rest)))
+          (<- (member ?item (?x ?item)))
+          (<- (member ?item (?x & ?rest))
+              (different ?rest ())
+              (member ?item ?rest))
+          (<-- (nextto ?x ?y ?list) (iright ?x ?y ?list))
+          (<-  (nextto ?x ?y ?list) (iright ?y ?x ?list))
+          (<-- (iright ?left ?right (?left ?right & ?rest)))
+          (<-  (iright ?left ?right (? & ?rest))
+               (different ?rest (?))
+               (iright ?left ?right ?rest))
+          (<-- (zebra ?houses ?w ?z)
+               (same ?houses ((house norwegian ? ? ? ?) ; 1,10
+                              ?
+                              (house ? ? ? milk ?) ; 9
+                              ?
+                              ?))
+               (member (house englishman ? ? ? red) ?houses)       ; 2
+               (member (house spaniard dog ? ? ?) ?houses)         ; 3
+               (member (house ? ? ? coffee green) ?houses)         ; 4
+               (member (house ukrainian ? ? tea ?) ?houses)        ; 5
+               (iright (house ? ? ? ? ivory)                  ; 6
+                       (house ? ? ? ? green) ?houses)
+               (member (house ? snails winston ? ?) ?houses)       ; 7
+               (member (house ? ? kools ? yellow) ?houses)         ; 8
+               (nextto (house ? ? chesterfield ? ?)           ; 11
+                       (house ? fox ? ? ?) ?houses)
+               (nextto (house ? ? kools ? ?)                  ; 12
+                       (house ? horse ? ? ?) ?houses)
+               (member (house ? ? luckystrike oj ?) ?houses)       ; 13
+               (member (house japanese ? parliaments ? ?) ?houses) ; 14
+               (nextto (house norwegian ? ? ? ?)              ; 15
+                       (house ? ? ? ? blue) ?houses)
+               (member (house ?w ? ? water ?) ?houses)             ; Q1
+               (member (house ?z zebra ? ? ?) ?houses))            ; Q2
+          )
+      (is (= '[[((house norwegian fox kools water yellow)
+                 (house ukrainian horse chesterfield tea blue)
+                 (house englishman snails winston milk red)
+                 (house spaniard dog luckystrike oj ivory)
+                 (house japanese zebra parliaments coffee green))
+                norwegian
+                japanese]]
+             (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))))))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.
 ;;; Copy any authoritative output to leash-tests.txt.
@@ -907,11 +1048,10 @@ Recorded answer: jacob
                  (query '?x '((male ?x) (foo)))))))
 
       (do (initialize-prolog)
-          (assert<- '((uncle ?nephew ?uncle) ; <--
-                      (parent ?nephew ?parent)
+          (assert<- '((uncle ?nibling ?uncle) ; <--
+                      (parent ?nibling ?parent)
                       (sibling ?uncle ?parent)
-                      (male ?uncle)
-                      (male ?nephew)))
+                      (male ?uncle)))
           (assert<- '((sibling ?x ?y) ; <--
                       (brother ?x ?y)))
           (assert<- '((sibling ?x ?y) ; <--
@@ -928,8 +1068,8 @@ Recorded answer: jacob
 0. Working on goal (uncle jacob ?uncle:0)
 0. Remaining goals: ()
  1. Entering uncle/2: (uncle jacob ?uncle:1)
- 1. Matched head (uncle ?nephew:1 ?uncle:1): (uncle jacob ?uncle:1)
- 1. Working on goal (parent ?nephew:1 ?parent:1): (parent jacob ?parent:1)
+ 1. Matched head (uncle ?nibling:1 ?uncle:1): (uncle jacob ?uncle:1)
+ 1. Working on goal (parent ?nibling:1 ?parent:1): (parent jacob ?parent:1)
  1. Remaining goals: ((sibling ?uncle:1 ?parent:1) (male ?uncle:1) (male jacob))
   2. Entering parent/2: (parent jacob rebecca)
   2. Matched head (parent jacob rebecca): (parent jacob rebecca)
@@ -953,7 +1093,7 @@ Recorded answer: jacob
   2. Entering male/1: (male laban)
   2. Matched head (male laban): (male laban)
   2. Succeeded male/1: (male laban)
- 1. Working on goal (male ?nephew:1): (male jacob)
+ 1. Working on goal (male ?nibling:1): (male jacob)
  1. Remaining goals: ()
   2. Entering male/1: (male jacob)
   2. Matched head (male jacob): (male jacob)

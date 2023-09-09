@@ -3,7 +3,8 @@
 Full-featured logic programming (AKA "Prolog") embedded in/callable
 from and supporting calls to Clojure.  In the spirit of LogLisp, Lisp
 Machine Prolog, and Franz Inc.'s Allegro Prolog, with some extra
-goodies.
+goodies.  Emphasis on expressive power and execution transparency,
+supporting rapid prototyping and proof-of-concept development.
 
 ## Highlights, with examples
 

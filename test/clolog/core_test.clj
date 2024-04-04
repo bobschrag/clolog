@@ -814,7 +814,7 @@
         (<- ([complex & ?rest] ?rest)))
     (is (= [true]
            (? true ([complex 1] (1)))))
-    ;; Zebra puzzle, adapted from https://github.com/p-swift/projure README:
+    ;; Zebra puzzle, adapted from https://franz.com/support/documentation/10.1/doc/prolog.html:
     (do (initialize-prolog)
         (<-- (member ?item (?item & ?rest)))
         (<- (member ?item (?x ?item)))
@@ -954,6 +954,55 @@
                 norwegian
                 japanese]]
              (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1))))))
+
+(deftest test-zebra-puzzle-only
+  (testing "zebra"
+    ;; Zebra puzzle, adapted from https://github.com/p-swift/projure README:
+    (do (initialize-prolog)
+        (<-- (member ?item (?item & ?rest)))
+        (<- (member ?item (?x ?item)))
+        (<- (member ?item (?x & ?rest))
+            (different ?rest ())
+            (member ?item ?rest))
+        (<-- (nextto ?x ?y ?list) (iright ?x ?y ?list))
+        (<-  (nextto ?x ?y ?list) (iright ?y ?x ?list))
+        (<-- (iright ?left ?right (?left ?right & ?rest)))
+        (<-  (iright ?left ?right (? & ?rest))
+             (different ?rest (?))
+             (iright ?left ?right ?rest))
+        (<-- (zebra ?houses ?w ?z)
+             (same ?houses ((house norwegian ? ? ? ?) ; 1,10
+                            ?
+                            (house ? ? ? milk ?) ; 9
+                            ?
+                            ?))
+             (member (house englishman ? ? ? red) ?houses)       ; 2
+             (member (house spaniard dog ? ? ?) ?houses)         ; 3
+             (member (house ? ? ? coffee green) ?houses)         ; 4
+             (member (house ukrainian ? ? tea ?) ?houses)        ; 5
+             (iright (house ? ? ? ? ivory)                  ; 6
+                     (house ? ? ? ? green) ?houses)
+             (member (house ? snails winston ? ?) ?houses)       ; 7
+             (member (house ? ? kools ? yellow) ?houses)         ; 8
+             (nextto (house ? ? chesterfield ? ?)           ; 11
+                     (house ? fox ? ? ?) ?houses)
+             (nextto (house ? ? kools ? ?)                  ; 12
+                     (house ? horse ? ? ?) ?houses)
+             (member (house ? ? luckystrike oj ?) ?houses)       ; 13
+             (member (house japanese ? parliaments ? ?) ?houses) ; 14
+             (nextto (house norwegian ? ? ? ?)              ; 15
+                     (house ? ? ? ? blue) ?houses)
+             (member (house ?w ? ? water ?) ?houses)             ; Q1
+             (member (house ?z zebra ? ? ?) ?houses))            ; Q2
+        )
+    (is (= '[[((house norwegian fox kools water yellow)
+               (house ukrainian horse chesterfield tea blue)
+               (house englishman snails winston milk red)
+               (house spaniard dog luckystrike oj ivory)
+               (house japanese zebra parliaments coffee green))
+              norwegian
+              japanese]]
+           (query '[?h ?w ?z] '((zebra ?h ?w ?z)) :limit 1)))))
 
 ;;; Run this (at a clolog.core REPL), to generate leash tests.
 ;;; Copy any authoritative output to leash-tests.txt.

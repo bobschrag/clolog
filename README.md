@@ -4,7 +4,8 @@ Full-featured logic programming (AKA "Prolog") embedded in/callable
 from and supporting calls to Clojure.  In the spirit of LogLisp, Lisp
 Machine Prolog, and Franz Inc.'s Allegro Prolog, with some extra
 goodies.  Emphasis on expressive power and execution transparency,
-supporting rapid prototyping and proof-of-concept development.
+supporting rapid prototyping, proof-of-concept development, and
+outer-loop reasoning (i.e., not real fast, so far).
 
 ## Highlights, with examples
 
@@ -771,31 +772,31 @@ does not succeed, then it fails.
   Backtracking will explore alternative ways to satisfy the argument
   statements.
 
-- `(not \<statement\>)` succeeds if the wrapped statement fails.
+- `(not` \<statement\>`)` succeeds if the wrapped statement fails.
 
-- `(first \<statement\>)` succeeds if the argument statement succeeds.  This
+- `(first` \<statement\>`)` succeeds if the argument statement succeeds.  This
   form (AKA Prolog "cut") skips backtracking to explore other ways of
   satisfying the statement, upon its first success.
 
-- `(same \<term\> \<term\>)` succeeds if the two terms match.
+- `(same` \<term\> \<term\>`)` succeeds if the two terms match.
 
 - `(true)` succeeds unconditionally.
 
 - `(false)` fails unconditionally.
 
-- `(var \<term\>)` succeeds if the argument term is a ?var.
+- `(var` \<term\>`)` succeeds if the argument term is a ?var.
 
 - `(ground \<term\>)` succeeds if the argument term is ground.
 
-- `(truthy? \<form\>)` succeeds if the argument form is ground and
+- `(truthy?` \<form\>`)` succeeds if the argument form is ground and
   the result of its evaluation (in Clojure) is truthy.
 
-- `(evals-from? \<term\> \<form\>)` succeeds if the argument form is
+- `(evals-from?` \<term\> \<form\>`)` succeeds if the argument form is
   ground and the result of its evaluation (in Clojure) matches the
   argument term (often a ?var).
 
-- `(do \<form\>)` succeeds if the argument form is ground, evaluating
-  it (in Clojure) for side effect, only.
+- `(do` \<form\>*`)` succeeds if the whole `do` expression is ground,
+  evaluating it (in Clojure) for side effect, only.
 
 ## Creating special transforms
 
